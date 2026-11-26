@@ -1,0 +1,15 @@
+# NSH generated editor/type metadata and packaged web output
+/.nsh/
+
+# Node dependencies and build output
+node_modules/
+dist/
+
+# Runtime state for the launcher
+/.forge-nsh/
+*.pid
+*.log
+
+# Local temporary files
+/tmp/
+.DS_Store

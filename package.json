@@ -1,0 +1,21 @@
+{
+  "name": "forge-nsh",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NSH web workbench with an embedded Forge Core host",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=22.23.1 <23"
+  },
+  "scripts": {
+    "setup": "node scripts/build.mjs",
+    "build": "node scripts/build.mjs",
+    "check": "nsh check App.tsx && node --check scripts/forge-nsh.mjs && node --check scripts/build.mjs && node --check scripts/smoke.mjs",
+    "serve": "node scripts/forge-nsh.mjs serve",
+    "start": "node scripts/forge-nsh.mjs start",
+    "stop": "node scripts/forge-nsh.mjs stop",
+    "status": "node scripts/forge-nsh.mjs status",
+    "smoke": "node scripts/smoke.mjs"
+  }
+}
