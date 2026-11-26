@@ -1,11 +1,15 @@
-import { batch, computed, signal } from "nsh";
+import { batch, computed, setColorScheme, signal } from "nsh";
 import { clampText, errorText, formatNumber } from "./format";
 import {
   type AgentEvent,
   type ApprovalRequest,
+  type ConfigureInput,
   type ConnectResponse,
   ForgeApiClient,
   type HostEvent,
+  type ModelAccessResult,
+  type PublicProviderPreset,
+  type PublicSettings,
   type RunHandle,
   type SessionSnapshot,
   type SessionStatus,
@@ -57,15 +61,20 @@ export const busyAction = signal<string | undefined>();
 export const lastError = signal<string | undefined>();
 export const lastCursor = signal(0);
 
-export interface CoreSettings {
-  baseUrl?: string;
-  model?: string;
-  hasApiKey?: boolean;
-  isConfigured?: boolean;
-}
+export type SettingsLoadState = "idle" | "loading" | "ready" | "error";
 
-export const coreSettings = signal<CoreSettings | undefined>();
+export const coreSettings = signal<PublicSettings | undefined>();
 export const availableModels = signal<readonly string[]>([]);
+export const settingsOpen = signal(false);
+export const settingsLoadState = signal<SettingsLoadState>("idle");
+export const settingsLoadError = signal<string | undefined>();
+
+/** Settings writes require both a live Core and a fresh authoritative read. */
+export const settingsWritable = computed(() =>
+  connectionState() === "online" &&
+  settingsLoadState() === "ready" &&
+  coreSettings() !== undefined
+);
 
 export const activeSnapshot = computed<SessionSnapshot | undefined>(() => {
   const id = activeSessionId();
@@ -145,16 +154,108 @@ export async function selectSession(sessionId: string): Promise<void> {
   else void refreshSession(sessionId);
 }
 
-export async function refreshCoreConfig(): Promise<void> {
+function adoptCoreSettings(settings: PublicSettings): void {
+  coreSettings.set(settings);
+  // Forge and the CLI share this preference. NSH can honor it directly,
+  // including the light/dark token pair already defined by the app theme.
+  setColorScheme(settings.theme ?? "system");
+}
+
+export async function listProviderModels(
+  sourceId?: string,
+  refresh = false,
+): Promise<readonly string[]> {
+  return client.rpc<readonly string[]>("listModels", {
+    ...(sourceId ? { sourceId } : {}),
+    ...(refresh ? { refresh: true } : {}),
+  });
+}
+
+/** Rich host catalog read: includes models hidden from runtime selection and
+ * returns stale-cache metadata instead of discarding a previously good list.
+ */
+export async function listProviderCatalog(
+  sourceId: string,
+  refresh = false,
+): Promise<Extract<ModelAccessResult, { type: "catalog" }>> {
+  const result = await client.rpc<ModelAccessResult>("modelAccess", {
+    input: {
+      type: "catalog",
+      sourceId,
+      includeUnselected: true,
+      ...(refresh ? { refresh: true } : {}),
+    },
+  });
+  if (result.type !== "catalog") throw new Error("Forge Core returned the wrong catalog response.");
+  return result;
+}
+
+export async function listProviderPresets(): Promise<readonly PublicProviderPreset[]> {
+  const result = await client.rpc<ModelAccessResult>("modelAccess", {
+    input: { type: "presets" },
+  });
+  if (result.type !== "presets") throw new Error("Forge Core returned the wrong preset response.");
+  return result.presets;
+}
+
+let coreConfigRequest = 0;
+let settingsSaveTail: Promise<void> = Promise.resolve();
+
+/** Returns true only when this request installed a fresh authoritative snapshot. */
+export async function refreshCoreConfig(): Promise<boolean> {
+  const request = ++coreConfigRequest;
+  settingsLoadState.set("loading");
+  settingsLoadError.set(undefined);
   try {
-    const settings = await client.rpc<CoreSettings>("getSettings");
-    coreSettings.set(settings);
-    const models = await client.rpc<readonly string[]>("listModels").catch(() => []);
-    availableModels.set(models);
-  } catch {
-    coreSettings.set(undefined);
-    availableModels.set([]);
+    const settings = await client.rpc<PublicSettings>("getSettings");
+    if (request !== coreConfigRequest) return false;
+    adoptCoreSettings(settings);
+    settingsLoadState.set("ready");
+    const models = await listProviderModels().catch(() => []);
+    if (request === coreConfigRequest) availableModels.set(models);
+    return true;
+  } catch (error) {
+    if (request !== coreConfigRequest) return false;
+    // Keep the last good snapshot visible while offline; the editor is disabled
+    // until the connection and a fresh read are both available.
+    settingsLoadState.set("error");
+    settingsLoadError.set(errorText(error));
+    if (!coreSettings()) availableModels.set([]);
+    return false;
   }
+}
+
+/** Persist updates sequentially and adopt the authoritative public projection.
+ * Serialization prevents an earlier transaction's response from overwriting a
+ * newer one when the provider and general editors are used together.
+ */
+export function saveSettings(input: ConfigureInput): Promise<PublicSettings> {
+  const operation = settingsSaveTail.then(async () => {
+    const settings = await client.rpc<PublicSettings>("updateSettings", { input });
+    // A refresh that started before this write can land after it with a stale
+    // projection. Invalidate it only once the write is known to have succeeded.
+    coreConfigRequest += 1;
+    batch(() => {
+      adoptCoreSettings(settings);
+      settingsLoadState.set("ready");
+      settingsLoadError.set(undefined);
+    });
+    return settings;
+  });
+  settingsSaveTail = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
+export function openSettings(): void {
+  settingsOpen.set(true);
+  if (connectionState() === "online") void refreshCoreConfig();
+}
+
+export function closeSettings(): void {
+  settingsOpen.set(false);
 }
 
 export async function createSession(): Promise<void> {
