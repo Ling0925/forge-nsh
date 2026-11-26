@@ -132,7 +132,7 @@ export function Inspector() {
           <Fact label="Tool" value={activeRun().currentTool ?? "—"} mono />
           <Fact label="Context" value={activeRun().contextLabel ?? "—"} mono />
           <Fact label="Usage" value={activeRun().usageLabel ?? "—"} />
-          <Fact label="Last event" value={formatTime(activeSnapshot()?.updatedAt)} />
+          <Fact label="Last event" value={formatTime(activeRun().lastEventAt ?? activeSnapshot()?.updatedAt)} />
         </Section>
         <Divider />
         <View class="p-4">

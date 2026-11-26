@@ -6,11 +6,16 @@ import { focusRingClass, textClasses } from "../../theme";
 import { Surface } from "../../ui/surface";
 
 export function SettingsInput(props: InputProps & { invalid?: boolean }) {
-  const [own, rest] = split(props, ["invalid", "class"]);
+  const [own, rest] = split(props, ["invalid", "readonly", "class"]);
   return (
     <Input
       {...rest}
-      class={`min-h-9 w-full rounded-(--radius) border bg-surface-inset px-3 py-2 text-sm leading-5 text-foreground caret-primary placeholder:text-dim-foreground selection:bg-selection disabled:bg-control-disabled disabled:text-control-disabled-foreground ${own.invalid ? "border-danger" : "border-input"} ${focusRingClass} ${own.class ?? ""}`}
+      readonly={own.readonly}
+      class={`min-h-9 w-full rounded-(--radius) border px-3 py-2 text-sm leading-5 caret-primary placeholder:text-dim-foreground selection:bg-selection ${
+        own.readonly
+          ? "border-border-subtle bg-control-disabled text-control-disabled-foreground"
+          : `${own.invalid ? "border-danger" : "border-input"} bg-surface-inset text-foreground`
+      } ${focusRingClass} ${own.class ?? ""}`}
     />
   );
 }

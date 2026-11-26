@@ -1,6 +1,12 @@
-import { coreSettings, refreshCoreConfig } from "../store";
-import { adoptGeneralSettings } from "./general";
-import { adoptProviderSettings, refreshProviderPresets } from "./provider";
+import { AlertDialog } from "nsh/base";
+import { closeSettings, coreSettings, refreshCoreConfig } from "../store";
+import { adoptGeneralSettings, generalDirty, resetGeneralDraft } from "./general";
+import {
+  adoptProviderSettings,
+  providerDirty,
+  refreshProviderPresets,
+  resetProviderDraft,
+} from "./provider";
 
 export * from "./common";
 export * from "./general";
@@ -24,4 +30,32 @@ export function seedSettingsFormsFromCache(): void {
   if (!settings) return;
   adoptGeneralSettings(settings);
   adoptProviderSettings(settings);
+}
+
+let closingSettings = false;
+
+/** Confirm discarding unsaved edits and clear any typed write-only API key before leaving. */
+export async function requestCloseSettings(): Promise<void> {
+  if (closingSettings) return;
+  if (providerDirty() || generalDirty()) {
+    closingSettings = true;
+    try {
+      const result = await AlertDialog.show({
+        title: "Discard unsaved settings?",
+        description: "Your unsaved changes will be lost.",
+        actions: [
+          { id: "stay", label: "Keep editing", role: "cancel" },
+          { id: "discard", label: "Discard & leave", role: "destructive" },
+        ],
+        closeOnEscape: true,
+        closeOnBackdropPress: true,
+      });
+      if (result.action !== "discard") return;
+    } finally {
+      closingSettings = false;
+    }
+  }
+  resetGeneralDraft();
+  resetProviderDraft();
+  closeSettings();
 }

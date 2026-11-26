@@ -426,13 +426,21 @@ export class ForgeApiClient {
     const query = `clientId=${encodeURIComponent(this.clientId)}&cursor=${encodeURIComponent(String(cursor))}`;
     const socket = new WebSocket(`${socketOrigin}/api/events?${query}`);
     this.socket = socket;
-    socket.onopen = () => callbacks.onOpen?.();
-    socket.onerror = () => callbacks.onError?.();
+    socket.onopen = () => {
+      if (this.socket !== socket) return;
+      callbacks.onOpen?.();
+    };
+    socket.onerror = () => {
+      if (this.socket !== socket) return;
+      callbacks.onError?.();
+    };
     socket.onclose = (event) => {
-      if (this.socket === socket) this.socket = undefined;
+      if (this.socket !== socket) return;
+      this.socket = undefined;
       callbacks.onClose?.(event.code, event.reason);
     };
     socket.onmessage = (event) => {
+      if (this.socket !== socket) return;
       if (typeof event.data !== "string") return;
       let batch: EventBatch;
       try {
@@ -444,7 +452,7 @@ export class ForgeApiClient {
       try {
         callbacks.onEvents?.(batch.events, batch.cursor);
         // Core's lease and replay logic expect explicit cursor acknowledgements.
-        if (socket.readyState === WebSocket.OPEN) {
+        if (this.socket === socket && socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ cursor: batch.cursor }));
         }
       } catch (error) {
@@ -456,7 +464,12 @@ export class ForgeApiClient {
   closeEvents(): void {
     const socket = this.socket;
     this.socket = undefined;
-    if (socket && socket.readyState !== WebSocket.CLOSED) socket.close();
+    if (!socket) return;
+    socket.onopen = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    socket.onmessage = null;
+    if (socket.readyState !== WebSocket.CLOSED) socket.close();
   }
 
   close(): void {

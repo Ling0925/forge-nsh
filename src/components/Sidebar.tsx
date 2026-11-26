@@ -2,12 +2,13 @@ import { Scroll, Text, View } from "nsh";
 import { compactPath, formatTime, oneLine, statusLabel } from "../format";
 import {
   activeSessionId,
-  busyAction,
   connectionState,
   createSession,
+  isBusy,
   openSettings,
   selectSession,
   sessionCount,
+  sidebarOpen,
   socketState,
   sortedSessions,
   workspace,
@@ -73,7 +74,7 @@ function connectionBadgeLabel(): string {
   return socketState() === "live" ? "Core connected" : "Events connecting";
 }
 
-export function Sidebar() {
+export function Sidebar(props: { compact?: boolean }) {
   return (
     <View
       class="h-full border-r border-sidebar-border bg-sidebar pb-3 pt-4"
@@ -82,16 +83,27 @@ export function Sidebar() {
       accessibilityLabel="Forge sessions and workspace"
     >
       <View class="gap-4 px-4">
-        <View class="flex-row items-center gap-3">
-          <View class="size-9 items-center justify-center rounded-(--radius-lg) border border-primary-border bg-primary-soft">
-            <Text class="text-base font-bold leading-5 text-primary">F</Text>
+        <View class="flex-row items-center justify-between gap-2">
+          <View class="min-w-0 flex-1 flex-row items-center gap-3">
+            <View class="size-9 items-center justify-center rounded-(--radius-lg) border border-primary-border bg-primary-soft">
+              <Text class="text-base font-bold leading-5 text-primary">F</Text>
+            </View>
+            <View class="min-w-0 flex-1 gap-0.5">
+              <Text class="text-base font-bold leading-5 tracking-tight text-sidebar-foreground">
+                Forge NSH
+              </Text>
+              <Text class={textClasses.dim}>native shell workbench</Text>
+            </View>
           </View>
-          <View class="gap-0.5">
-            <Text class="text-base font-bold leading-5 tracking-tight text-sidebar-foreground">
-              Forge NSH
-            </Text>
-            <Text class={textClasses.dim}>native shell workbench</Text>
-          </View>
+          <If when={props.compact === true}>
+            <Button
+              variant="ghost"
+              size="sm"
+              label="✕"
+              onPress={() => sidebarOpen.set(false)}
+              accessibilityLabel="Close sessions sidebar"
+            />
+          </If>
         </View>
 
         <Surface variant="soft" class="gap-1 px-3 py-2.5">
@@ -105,10 +117,10 @@ export function Sidebar() {
           variant="soft"
           size="md"
           class="w-full"
-          label={busyAction() === "create" ? "Creating…" : "+ New session"}
-          busy={busyAction() === "create"}
+          label={isBusy("create") ? "Creating…" : "+ New session"}
+          busy={isBusy("create")}
           onPress={() => void createSession()}
-          disabled={busyAction() === "create" || connectionState() !== "online"}
+          disabled={isBusy("create") || connectionState() !== "online"}
           accessibilityLabel="Create a new Forge session"
         />
       </View>

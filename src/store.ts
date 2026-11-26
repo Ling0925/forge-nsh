@@ -18,6 +18,7 @@ import {
 
 export type ConnectionState = "connecting" | "online" | "offline";
 export type SocketState = "connecting" | "live" | "offline";
+export type BusyAction = "create" | "send" | "cancel" | "approval" | "refresh";
 
 export interface RunUiState {
   runId?: string;
@@ -32,6 +33,7 @@ export interface RunUiState {
   permission?: string;
   usageLabel?: string;
   contextLabel?: string;
+  lastEventAt?: string;
 }
 
 export interface TranscriptRow {
@@ -57,9 +59,26 @@ export const snapshots = signal<Record<string, SessionSnapshot>>({});
 export const activeSessionId = signal<string | undefined>();
 export const runStates = signal<Record<string, RunUiState>>({});
 export const composerText = signal("");
-export const busyAction = signal<string | undefined>();
+const busyActions = signal<ReadonlySet<BusyAction>>(new Set());
+export const sidebarOpen = signal(false);
+export const scrollToBottomTick = signal(0);
 export const lastError = signal<string | undefined>();
 export const lastCursor = signal(0);
+
+export function isBusy(action: BusyAction): boolean {
+  return busyActions().has(action);
+}
+
+function setBusy(action: BusyAction, active: boolean): void {
+  const next = new Set(busyActions());
+  if (active) next.add(action);
+  else next.delete(action);
+  busyActions.set(next);
+}
+
+export function isWorkingStatus(status: string | undefined): boolean {
+  return status === "running" || status === "awaiting_approval";
+}
 
 export type SettingsLoadState = "idle" | "loading" | "ready" | "error";
 
@@ -85,6 +104,12 @@ export const activeRun = computed<RunUiState>(() => {
   const id = activeSessionId();
   return (id ? runStates()[id] : undefined) ?? EMPTY_RUN;
 });
+
+export const activeStatus = computed<SessionStatus | undefined>(() =>
+  activeRun().status ?? activeSnapshot()?.status
+);
+
+export const activeWorking = computed(() => isWorkingStatus(activeStatus()));
 
 export const sortedSessions = computed<readonly SessionSummary[]>(() =>
   [...sessions()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
@@ -122,9 +147,14 @@ function visibleSession(list: readonly SessionSummary[]): SessionSummary | undef
   return list.find((session) => !session.archived) ?? list[0];
 }
 
+const sessionRefreshSeq = new Map<string, number>();
+
 export async function refreshSession(sessionId: string): Promise<void> {
+  const seq = (sessionRefreshSeq.get(sessionId) ?? 0) + 1;
+  sessionRefreshSeq.set(sessionId, seq);
   try {
     const snapshot = await client.rpc<SessionSnapshot>("getSession", { sessionId });
+    if (sessionRefreshSeq.get(sessionId) !== seq) return;
     putSnapshot(snapshot);
     updateSummary(sessionId, {
       title: snapshot.title,
@@ -133,7 +163,7 @@ export async function refreshSession(sessionId: string): Promise<void> {
       model: snapshot.model,
     });
   } catch (error) {
-    lastError.set(errorText(error));
+    if (sessionRefreshSeq.get(sessionId) === seq) lastError.set(errorText(error));
   }
 }
 
@@ -148,8 +178,25 @@ export async function refreshSessions(): Promise<void> {
   if (selected) await refreshSession(selected);
 }
 
+export async function manualRefresh(): Promise<void> {
+  if (isBusy("refresh") || connectionState() !== "online") return;
+  setBusy("refresh", true);
+  lastError.set(undefined);
+  try {
+    await refreshSessions();
+  } catch (error) {
+    lastError.set(errorText(error));
+  } finally {
+    setBusy("refresh", false);
+  }
+}
+
 export async function selectSession(sessionId: string): Promise<void> {
-  activeSessionId.set(sessionId);
+  batch(() => {
+    sidebarOpen.set(false);
+    activeSessionId.set(sessionId);
+    scrollToBottomTick.update((n) => n + 1);
+  });
   if (!snapshots()[sessionId]) await refreshSession(sessionId);
   else void refreshSession(sessionId);
 }
@@ -250,8 +297,10 @@ export function saveSettings(input: ConfigureInput): Promise<PublicSettings> {
 }
 
 export function openSettings(): void {
-  settingsOpen.set(true);
-  if (connectionState() === "online") void refreshCoreConfig();
+  batch(() => {
+    sidebarOpen.set(false);
+    settingsOpen.set(true);
+  });
 }
 
 export function closeSettings(): void {
@@ -260,8 +309,8 @@ export function closeSettings(): void {
 
 export async function createSession(): Promise<void> {
   const root = workspace() || connectInfo()?.workspace;
-  if (!root || busyAction()) return;
-  busyAction.set("create");
+  if (!root || isBusy("create") || connectionState() !== "online") return;
+  setBusy("create", true);
   lastError.set(undefined);
   try {
     const configuredModel = coreSettings()?.model?.trim() || availableModels()[0];
@@ -272,8 +321,10 @@ export async function createSession(): Promise<void> {
       },
     });
     batch(() => {
+      sidebarOpen.set(false);
       putSnapshot(snapshot);
       activeSessionId.set(snapshot.id);
+      scrollToBottomTick.update((n) => n + 1);
     });
     await refreshSessions();
     activeSessionId.set(snapshot.id);
@@ -281,23 +332,28 @@ export async function createSession(): Promise<void> {
   } catch (error) {
     lastError.set(errorText(error));
   } finally {
-    busyAction.set(undefined);
+    setBusy("create", false);
   }
 }
 
 export async function sendPrompt(): Promise<void> {
   const sessionId = activeSessionId();
   const prompt = composerText().trim();
-  if (!sessionId || !prompt || busyAction() === "send") return;
-  composerText.set("");
-  busyAction.set("send");
-  lastError.set(undefined);
-  updateRun(sessionId, {
-    status: "running",
-    error: undefined,
-    activity: "Starting run",
-    streamingText: "",
-    streamingReasoning: "",
+  if (!sessionId || !prompt || isBusy("send") || connectionState() !== "online") return;
+  const currentStatus = runFor(sessionId).status ?? snapshots()[sessionId]?.status;
+  if (isWorkingStatus(currentStatus)) return;
+  batch(() => {
+    composerText.set("");
+    setBusy("send", true);
+    lastError.set(undefined);
+    scrollToBottomTick.update((n) => n + 1);
+    updateRun(sessionId, {
+      status: "running",
+      error: undefined,
+      activity: "Starting run",
+      streamingText: "",
+      streamingReasoning: "",
+    });
   });
   try {
     const handle = await client.rpc<RunHandle>("startRun", {
@@ -309,20 +365,22 @@ export async function sendPrompt(): Promise<void> {
       activity: "Run accepted",
     });
   } catch (error) {
-    composerText.set(prompt);
+    if (activeSessionId() === sessionId && composerText().trim().length === 0) {
+      composerText.set(prompt);
+    }
     const message = errorText(error);
     updateRun(sessionId, { status: "failed", error: message, activity: undefined });
     lastError.set(message);
   } finally {
-    busyAction.set(undefined);
+    setBusy("send", false);
   }
 }
 
 export async function cancelActive(): Promise<void> {
   const sessionId = activeSessionId();
-  if (!sessionId || busyAction() === "cancel") return;
+  if (!sessionId || isBusy("cancel")) return;
   const run = runFor(sessionId);
-  busyAction.set("cancel");
+  setBusy("cancel", true);
   try {
     if (run.runId) {
       await client.rpc<null>("cancelRun", { runId: run.runId });
@@ -333,7 +391,7 @@ export async function cancelActive(): Promise<void> {
   } catch (error) {
     lastError.set(errorText(error));
   } finally {
-    busyAction.set(undefined);
+    setBusy("cancel", false);
   }
 }
 
@@ -342,8 +400,8 @@ export async function answerApproval(approved: boolean): Promise<void> {
   if (!sessionId) return;
   const run = runFor(sessionId);
   const approval = run.pendingApproval;
-  if (!run.runId || !approval || busyAction() === "approval") return;
-  busyAction.set("approval");
+  if (!run.runId || !approval || isBusy("approval")) return;
+  setBusy("approval", true);
   try {
     await client.rpc<null>("answerApproval", {
       runId: run.runId,
@@ -358,7 +416,7 @@ export async function answerApproval(approved: boolean): Promise<void> {
   } catch (error) {
     lastError.set(errorText(error));
   } finally {
-    busyAction.set(undefined);
+    setBusy("approval", false);
   }
 }
 
@@ -387,16 +445,36 @@ function contextLabel(event: AgentEvent): string | undefined {
   return windowTokens ? `${used} / ${windowTokens}` : used;
 }
 
-function refreshSoon(sessionId: string, includeList = false): void {
-  void refreshSession(sessionId);
-  if (includeList) void refreshSessions().catch((error) => lastError.set(errorText(error)));
+interface PendingRefresh {
+  sessionIds: Set<string>;
+  includeList: boolean;
 }
 
-function handleHostEvent(host: HostEvent): void {
+function queueRefresh(pending: PendingRefresh, sessionId: string, includeList = false): void {
+  pending.sessionIds.add(sessionId);
+  if (includeList) pending.includeList = true;
+}
+
+function flushPendingRefresh(pending: PendingRefresh): void {
+  if (pending.includeList) {
+    const active = activeSessionId();
+    void refreshSessions().catch((error) => lastError.set(errorText(error)));
+    for (const id of pending.sessionIds) {
+      if (id !== active) void refreshSession(id);
+    }
+    return;
+  }
+  for (const id of pending.sessionIds) {
+    void refreshSession(id);
+  }
+}
+
+function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
   const event = host.event;
   const sessionId = event.sessionId;
   if (!sessionId) return;
-  updateSummary(sessionId, { updatedAt: event.timestamp });
+  const isDelta = event.type === "text_delta" || event.type === "reasoning_delta";
+  if (!isDelta) updateSummary(sessionId, { updatedAt: event.timestamp });
 
   if (event.type === "run_started") {
     updateRun(sessionId, {
@@ -411,13 +489,14 @@ function handleHostEvent(host: HostEvent): void {
       model: event.model,
       permission: event.permission,
       usageLabel: undefined,
+      lastEventAt: event.timestamp,
     });
     updateSummary(sessionId, {
       status: "running",
       ...(event.title ? { title: event.title } : {}),
       ...(event.model ? { model: event.model } : {}),
     });
-    refreshSoon(sessionId, true);
+    queueRefresh(pending, sessionId, true);
     return;
   }
 
@@ -426,8 +505,9 @@ function handleHostEvent(host: HostEvent): void {
       streamingText: "",
       streamingReasoning: "",
       currentTool: undefined,
+      lastEventAt: event.timestamp,
     });
-    if (event.type === "generation_finished") refreshSoon(sessionId);
+    if (event.type === "generation_finished") queueRefresh(pending, sessionId);
     return;
   }
 
@@ -437,6 +517,7 @@ function handleHostEvent(host: HostEvent): void {
       status: current.status === "awaiting_approval" ? current.status : "running",
       streamingText: appendLimited(current.streamingText, event.text, 131072),
       activity: undefined,
+      lastEventAt: event.timestamp,
     });
     return;
   }
@@ -445,6 +526,7 @@ function handleHostEvent(host: HostEvent): void {
     const current = runFor(sessionId);
     updateRun(sessionId, {
       streamingReasoning: appendLimited(current.streamingReasoning, event.text, 32768),
+      lastEventAt: event.timestamp,
     });
     return;
   }
@@ -453,12 +535,13 @@ function handleHostEvent(host: HostEvent): void {
     updateRun(sessionId, {
       currentTool: event.name || "tool",
       activity: `Preparing ${event.name || "tool"}`,
+      lastEventAt: event.timestamp,
     });
     return;
   }
 
   if (event.type === "tool_preview_reset") {
-    updateRun(sessionId, { currentTool: undefined, activity: undefined });
+    updateRun(sessionId, { currentTool: undefined, activity: undefined, lastEventAt: event.timestamp });
     return;
   }
 
@@ -468,8 +551,9 @@ function handleHostEvent(host: HostEvent): void {
       streamingReasoning: "",
       currentTool: event.call?.function.name ?? "tool",
       activity: event.call ? `Running ${event.call.function.name}` : "Running tool",
+      lastEventAt: event.timestamp,
     });
-    refreshSoon(sessionId);
+    queueRefresh(pending, sessionId);
     return;
   }
 
@@ -477,8 +561,9 @@ function handleHostEvent(host: HostEvent): void {
     updateRun(sessionId, {
       currentTool: undefined,
       activity: event.result?.isError ? "Tool failed" : "Tool finished",
+      lastEventAt: event.timestamp,
     });
-    refreshSoon(sessionId);
+    queueRefresh(pending, sessionId);
     return;
   }
 
@@ -487,9 +572,10 @@ function handleHostEvent(host: HostEvent): void {
       status: "awaiting_approval",
       pendingApproval: event.request,
       activity: "Approval required",
+      lastEventAt: event.timestamp,
     });
     updateSummary(sessionId, { status: "awaiting_approval" });
-    refreshSoon(sessionId);
+    queueRefresh(pending, sessionId);
     return;
   }
 
@@ -500,7 +586,10 @@ function handleHostEvent(host: HostEvent): void {
         pendingApproval: undefined,
         status: "running",
         activity: event.approved ? "Approval granted" : "Approval denied",
+        lastEventAt: event.timestamp,
       });
+    } else {
+      updateRun(sessionId, { lastEventAt: event.timestamp });
     }
     return;
   }
@@ -508,24 +597,26 @@ function handleHostEvent(host: HostEvent): void {
   if (event.type === "provider_retry") {
     updateRun(sessionId, {
       activity: `Retrying provider request (${event.attempt ?? 1}/${event.maxAttempts ?? 5})`,
+      lastEventAt: event.timestamp,
     });
     return;
   }
 
   if (event.type === "context_usage") {
-    updateRun(sessionId, { contextLabel: contextLabel(event) });
+    updateRun(sessionId, { contextLabel: contextLabel(event), lastEventAt: event.timestamp });
     return;
   }
 
   if (event.type === "state_changed" && event.status && event.status !== "superseded") {
     const current = runFor(sessionId);
     const status = current.pendingApproval ? "awaiting_approval" : event.status;
-    updateRun(sessionId, { status });
+    updateRun(sessionId, { status, lastEventAt: event.timestamp });
     updateSummary(sessionId, { status });
     return;
   }
 
   if (event.type === "title_changed" && event.title) {
+    updateRun(sessionId, { lastEventAt: event.timestamp });
     updateSummary(sessionId, { title: event.title });
     const snapshot = snapshots()[sessionId];
     if (snapshot) putSnapshot({ ...snapshot, title: event.title });
@@ -536,6 +627,7 @@ function handleHostEvent(host: HostEvent): void {
     updateRun(sessionId, {
       error: event.error.message,
       activity: undefined,
+      lastEventAt: event.timestamp,
     });
     return;
   }
@@ -549,10 +641,14 @@ function handleHostEvent(host: HostEvent): void {
       currentTool: undefined,
       activity: undefined,
       usageLabel: usageLabel(event),
+      lastEventAt: event.timestamp,
     });
     updateSummary(sessionId, { status: event.status });
-    refreshSoon(sessionId, true);
+    queueRefresh(pending, sessionId, true);
+    return;
   }
+
+  updateRun(sessionId, { lastEventAt: event.timestamp });
 }
 
 let reconnectTimer: number | undefined;
@@ -563,8 +659,12 @@ function openEventStream(cursor: number): void {
   client.openEvents(cursor, {
     onOpen: () => socketState.set("live"),
     onEvents: (events, nextCursor) => {
-      lastCursor.set(nextCursor);
-      for (const hostEvent of events) handleHostEvent(hostEvent);
+      const pending: PendingRefresh = { sessionIds: new Set(), includeList: false };
+      batch(() => {
+        lastCursor.set(nextCursor);
+        for (const hostEvent of events) handleHostEvent(hostEvent, pending);
+      });
+      flushPendingRefresh(pending);
     },
     onClose: () => {
       socketState.set("offline");
@@ -625,61 +725,74 @@ export async function boot(): Promise<void> {
   }
 }
 
-export const transcriptRows = computed<readonly TranscriptRow[]>(() => {
+export const historyRows = computed<readonly TranscriptRow[]>(() => {
   const snapshot = activeSnapshot();
-  const run = activeRun();
+  if (!snapshot) return [];
   const rows: TranscriptRow[] = [];
-  if (snapshot) {
-    for (const [index, message] of snapshot.messages.entries()) {
-      if (message.role === "system") continue;
-      if (message.role === "user") {
-        rows.push({
-          id: `user-${index}`,
-          kind: "user",
-          text: message.content,
-          detail: message.images?.length ? `${message.images.length} image attachment(s)` : undefined,
-        });
-        continue;
-      }
-      if (message.role === "assistant") {
-        if (message.reasoning?.trim()) {
-          rows.push({
-            id: `reasoning-${index}`,
-            kind: "reasoning",
-            text: clampText(message.reasoning, 1600),
-          });
-        }
-        if (message.content?.trim()) {
-          rows.push({ id: `assistant-${index}`, kind: "assistant", text: message.content });
-        }
-        if (message.tool_calls?.length) {
-          rows.push({
-            id: `calls-${index}`,
-            kind: "tool",
-            text: `Requested ${message.tool_calls.map((call) => call.function.name).join(", ")}`,
-            detail: "Tool call arguments are summarized by the PoC renderer.",
-          });
-        }
-        continue;
-      }
+  for (const [index, message] of snapshot.messages.entries()) {
+    if (message.role === "system") continue;
+    if (message.role === "user") {
       rows.push({
-        id: `tool-${index}`,
-        kind: "tool",
-        text: clampText(message.content, 1400),
-        detail: `Tool result ${message.tool_call_id.slice(0, 8)}`,
+        id: `${snapshot.id}:user-${index}`,
+        kind: "user",
+        text: message.content,
+        detail: message.images?.length ? `${message.images.length} image attachment(s)` : undefined,
       });
+      continue;
     }
-  }
-  if (run.streamingReasoning.trim()) {
+    if (message.role === "assistant") {
+      if (message.reasoning?.trim()) {
+        rows.push({
+          id: `${snapshot.id}:reasoning-${index}`,
+          kind: "reasoning",
+          text: clampText(message.reasoning, 1600),
+        });
+      }
+      if (message.content?.trim()) {
+        rows.push({ id: `${snapshot.id}:assistant-${index}`, kind: "assistant", text: message.content });
+      }
+      if (message.tool_calls?.length) {
+        rows.push({
+          id: `${snapshot.id}:calls-${index}`,
+          kind: "tool",
+          text: `Requested ${message.tool_calls.map((call) => call.function.name).join(", ")}`,
+          detail: "Tool call arguments are summarized by the PoC renderer.",
+        });
+      }
+      continue;
+    }
     rows.push({
-      id: "live-reasoning",
-      kind: "reasoning",
-      text: clampText(run.streamingReasoning, 1600),
-      live: true,
+      id: `${snapshot.id}:tool-${index}`,
+      kind: "tool",
+      text: clampText(message.content, 1400),
+      detail: `Tool result ${message.tool_call_id.slice(0, 8)}`,
     });
-  }
-  if (run.streamingText.trim()) {
-    rows.push({ id: "live-assistant", kind: "live", text: run.streamingText, live: true });
   }
   return rows;
 });
+
+export const liveReasoningRow = computed<TranscriptRow | undefined>(() => {
+  const run = activeRun();
+  if (!run.streamingReasoning.trim()) return undefined;
+  return {
+    id: "live-reasoning",
+    kind: "reasoning",
+    text: clampText(run.streamingReasoning, 1600),
+    live: true,
+  };
+});
+
+export const liveAssistantRow = computed<TranscriptRow | undefined>(() => {
+  const run = activeRun();
+  if (!run.streamingText.trim()) return undefined;
+  return {
+    id: "live-assistant",
+    kind: "live",
+    text: run.streamingText,
+    live: true,
+  };
+});
+
+export const hasTranscriptRows = computed(() =>
+  historyRows().length > 0 || liveReasoningRow() !== undefined || liveAssistantRow() !== undefined
+);

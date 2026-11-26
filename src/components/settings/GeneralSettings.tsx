@@ -3,6 +3,7 @@ import type { PermissionPreference, ReasoningEffort, ThemePreference } from "../
 import {
   generalDirty,
   generalDraft,
+  generalFieldErrors,
   generalLoaded,
   generalStatus,
   generalValidation,
@@ -199,6 +200,7 @@ export function GeneralSettings() {
           <Field
             label="Idle request timeout"
             description="How long a model stream may stay silent before the request fails. It does not cap total task duration."
+            error={generalFieldErrors().requestTimeoutMs}
           >
             <View class="gap-2">
               <SegmentedChoice
@@ -213,6 +215,7 @@ export function GeneralSettings() {
                   <SettingsInput
                     value={generalDraft().requestTimeoutMs}
                     readonly={disabled()}
+                    invalid={generalFieldErrors().requestTimeoutMs !== undefined}
                     keyboardType="numeric"
                     autoCorrect={false}
                     autoCapitalize="none"
@@ -235,12 +238,14 @@ export function GeneralSettings() {
           <Field
             label="Token compression budget"
             description="Leave blank for automatic (about 80% of the model context window). Manual values are capped by the model window."
+            error={generalFieldErrors().contextBudgetTokens}
           >
             <View class="flex-row items-center gap-2">
               <View style={{ width: 220 }}>
                 <SettingsInput
                   value={generalDraft().contextBudgetTokens}
                   readonly={disabled()}
+                  invalid={generalFieldErrors().contextBudgetTokens !== undefined}
                   keyboardType="numeric"
                   autoCorrect={false}
                   autoCapitalize="none"
@@ -255,12 +260,14 @@ export function GeneralSettings() {
           <Field
             label="Legacy character fallback"
             description="Used only when no token window is known. Normally this does not need to change."
+            error={generalFieldErrors().contextBudgetChars}
           >
             <View class="flex-row items-center gap-2">
               <View style={{ width: 220 }}>
                 <SettingsInput
                   value={generalDraft().contextBudgetChars}
                   readonly={disabled()}
+                  invalid={generalFieldErrors().contextBudgetChars !== undefined}
                   keyboardType="numeric"
                   autoCorrect={false}
                   autoCapitalize="none"

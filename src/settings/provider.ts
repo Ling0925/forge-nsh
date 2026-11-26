@@ -58,7 +58,7 @@ export const providerPresets = signal<readonly PublicProviderPreset[]>([]);
 export const providerPresetState = signal<CatalogState>({ loading: false, loaded: false });
 
 const providerBaselineSignature = signal<string>("");
-const pendingCatalogs = new Map<string, Promise<boolean>>();
+const pendingCatalogs = new Map<string, { promise: Promise<boolean>; forced: boolean }>();
 let providerSavedTimer: number | undefined;
 let actionSavedTimer: number | undefined;
 
@@ -210,6 +210,13 @@ function validateProviderDraft(draft: ProviderDraft): readonly string[] {
   else if (draft.label.trim().length > 80) errors.push("Source name: keep it at 80 characters or fewer.");
   const endpoint = endpointProblem(draft.baseUrl);
   if (endpoint) errors.push(`API base URL: ${endpoint}`);
+  for (const protocol of endpointProtocols) {
+    if (protocol === draft.apiMode) continue;
+    const extra = draft.endpoints[protocol]?.trim();
+    if (!extra) continue;
+    const problem = endpointProblem(extra);
+    if (problem) errors.push(`Endpoint (${protocol}): ${problem}`);
+  }
   if (!draft.model.trim()) errors.push("Model: enter a model ID or choose one from the catalog.");
   else if (draft.model.trim().length > 256) errors.push("Model: keep the ID at 256 characters or fewer.");
   if (/[\r\n\0]/.test(draft.apiKey)) errors.push("API key: line breaks are not allowed.");
@@ -262,7 +269,6 @@ export function startNewProviderSource(): void {
 /** Adopt source settings after a reload, without clobbering a dirty editor. */
 export function adoptProviderSettings(settings: PublicSettings, force = false): void {
   const sources = settings.providerSources ?? [];
-  const selected = selectedProviderSourceId();
   const current = providerDraft();
   if (!current || (!current.isNew && !sources.some((source) => source.id === current.id))) {
     const preferred = sources.find((source) => source.id === settings.activeSourceId) ?? sources[0];
@@ -311,10 +317,12 @@ export function changeProviderProtocol(protocol: ProviderProtocol): void {
   const current = providerDraft();
   if (!current) return;
   const endpoints = { ...current.endpoints };
-  if (current.baseUrl.trim()) endpoints[current.apiMode] = current.baseUrl;
+  const trimmed = current.baseUrl.trim();
+  if (trimmed && !endpointProblem(trimmed)) endpoints[current.apiMode] = trimmed;
   else delete endpoints[current.apiMode];
   const baseUrl = endpoints[protocol] ?? current.baseUrl;
-  if (baseUrl.trim()) endpoints[protocol] = baseUrl;
+  const nextTrimmed = baseUrl.trim();
+  if (nextTrimmed && !endpointProblem(nextTrimmed)) endpoints[protocol] = nextTrimmed;
   updateProviderDraft({ apiMode: protocol, baseUrl, endpoints });
 }
 
@@ -451,7 +459,7 @@ export async function saveProviderSource(): Promise<boolean> {
       baseUrl: draft.baseUrl.trim(),
       model: draft.model.trim(),
       apiMode: draft.apiMode,
-      preset: draft.preset,
+      ...(draft.preset ? { preset: draft.preset } : {}),
       endpoints,
     },
     ...(draft.revision === undefined ? {} : { expectedRevision: draft.revision }),
@@ -535,11 +543,15 @@ export async function removeProviderSource(id: string): Promise<boolean> {
 /** Load or refresh a source model catalog. Errors never include the API key. */
 export function refreshProviderCatalog(sourceId: string, refresh = true): Promise<boolean> {
   const pending = pendingCatalogs.get(sourceId);
-  if (pending) return pending;
+  if (pending && (!refresh || pending.forced)) return pending.promise;
   providerCatalogState.set({
     ...providerCatalogState(),
     [sourceId]: { ...(providerCatalogState()[sourceId] ?? { loaded: false }), loading: true, error: undefined },
   });
+  const entry: { promise: Promise<boolean>; forced: boolean } = {
+    promise: Promise.resolve(false),
+    forced: refresh,
+  };
   const request = (async () => {
     try {
       const result = await listProviderCatalog(sourceId, refresh);
@@ -570,9 +582,12 @@ export function refreshProviderCatalog(sourceId: string, refresh = true): Promis
       });
       return false;
     } finally {
-      pendingCatalogs.delete(sourceId);
+      if (pendingCatalogs.get(sourceId) === entry) {
+        pendingCatalogs.delete(sourceId);
+      }
     }
   })();
-  pendingCatalogs.set(sourceId, request);
+  entry.promise = request;
+  pendingCatalogs.set(sourceId, entry);
   return request;
 }

@@ -1,12 +1,12 @@
-import { Text, View } from "nsh";
+import { horizontalSizeClass, Text, View } from "nsh";
 import { formatTime, statusLabel } from "../format";
 import {
-  activeRun,
-  activeSessionId,
   activeSnapshot,
-  busyAction,
-  refreshSession,
-  refreshSessions,
+  activeStatus,
+  connectionState,
+  isBusy,
+  manualRefresh,
+  sidebarOpen,
 } from "../store";
 import { textClasses } from "../theme";
 import { Badge, type BadgeTone } from "../ui/badge";
@@ -21,17 +21,22 @@ function statusTone(status: string | undefined): BadgeTone {
 }
 
 export function CenterHeader() {
-  const status = () => activeRun().status ?? activeSnapshot()?.status;
-  const refresh = () => {
-    const id = activeSessionId();
-    if (id) void refreshSession(id);
-    void refreshSessions();
-  };
+  const status = () => activeStatus();
   return (
     <View
       class="flex-row items-center gap-3 border-b border-border-subtle bg-surface-soft px-5 py-3"
       style={{ minHeight: 64 }}
     >
+      <If when={horizontalSizeClass() !== "regular"}>
+        <Button
+          variant="outline"
+          size="sm"
+          label="☰"
+          onPress={() => sidebarOpen.set(true)}
+          accessibilityLabel="Open sessions sidebar"
+          tooltip="Sessions"
+        />
+      </If>
       <View class="min-w-0 flex-1 gap-1">
         <View class="min-w-0 flex-row items-center gap-2">
           <Text
@@ -51,10 +56,10 @@ export function CenterHeader() {
       <Button
         variant="outline"
         size="sm"
-        label="Refresh"
-        onPress={refresh}
-        disabled={busyAction() !== undefined}
-        busy={busyAction() !== undefined}
+        label={isBusy("refresh") ? "Refreshing…" : "Refresh"}
+        onPress={() => void manualRefresh()}
+        disabled={isBusy("refresh") || connectionState() !== "online"}
+        busy={isBusy("refresh")}
         accessibilityLabel="Refresh sessions"
         tooltip="Refresh sessions"
       />

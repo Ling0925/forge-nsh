@@ -5,12 +5,14 @@ import {
   activeRun,
   activeSessionId,
   activeSnapshot,
+  activeWorking,
   answerApproval,
-  busyAction,
   cancelActive,
   composerText,
   connectionState,
   createSession,
+  isBusy,
+  isWorkingStatus,
   lastError,
   sendPrompt,
   socketState,
@@ -18,10 +20,6 @@ import {
 import { elevatedShadow, textClasses } from "../theme";
 import { Button } from "../ui/button";
 import { Surface } from "../ui/surface";
-
-function isWorking(status: string | undefined): boolean {
-  return status === "running" || status === "awaiting_approval";
-}
 
 function ApprovalCard() {
   const approval = () => activeRun().pendingApproval;
@@ -56,15 +54,15 @@ function ApprovalCard() {
               size="sm"
               label="Deny"
               onPress={() => void answerApproval(false)}
-              disabled={busyAction() === "approval"}
+              disabled={isBusy("approval")}
             />
             <Button
               variant="primary"
               size="sm"
               label="Approve"
-              busy={busyAction() === "approval"}
+              busy={isBusy("approval")}
               onPress={() => void answerApproval(true)}
-              disabled={busyAction() === "approval"}
+              disabled={isBusy("approval")}
             />
           </View>
         </Surface>
@@ -112,7 +110,7 @@ function StatusLine() {
     <View class="min-h-6 justify-center px-1">
       <View class="flex-row items-center gap-2">
         <View
-          class={`size-2 rounded-full ${statusDotClasses[tone()]} ${isWorking(run().status) ? "animate-pulse motion-reduce:animate-none" : ""}`}
+          class={`size-2 rounded-full ${statusDotClasses[tone()]} ${isWorkingStatus(run().status) ? "animate-pulse motion-reduce:animate-none" : ""}`}
         />
         <Text
           class={`text-xs leading-4 ${statusTextClasses[tone()]}`}
@@ -127,11 +125,11 @@ function StatusLine() {
 
 export function Composer() {
   const hasSession = () => activeSessionId() !== undefined;
-  const running = () => isWorking(activeRun().status);
+  const running = () => activeWorking();
   const canSend = () => hasSession()
     && composerText().trim().length > 0
     && !running()
-    && busyAction() !== "send"
+    && !isBusy("send")
     && connectionState() === "online";
   return (
     <View class="border-t border-border-subtle bg-surface-soft px-4 pb-3 pt-2">
@@ -147,7 +145,7 @@ export function Composer() {
             multiline
             value={composerText()}
             onChange={(event) => composerText.set(event.value)}
-            onSubmit={() => void sendPrompt()}
+            onSubmit={() => { if (canSend()) void sendPrompt(); }}
             submitBehavior="submit"
             readonly={!hasSession()}
             accessibilityLabel={hasSession() ? `Message ${activeSnapshot()?.title ?? "Forge"}` : "Message Forge"}
@@ -170,27 +168,27 @@ export function Composer() {
                 <Button
                   variant="danger"
                   size="sm"
-                  label={busyAction() === "cancel" ? "Cancelling…" : "Cancel"}
-                  busy={busyAction() === "cancel"}
+                  label={isBusy("cancel") ? "Cancelling…" : "Cancel"}
+                  busy={isBusy("cancel")}
                   onPress={() => void cancelActive()}
-                  disabled={busyAction() === "cancel"}
+                  disabled={isBusy("cancel")}
                 />
               </If>
               <If when={!hasSession()}>
                 <Button
                   variant="soft"
                   size="sm"
-                  label={busyAction() === "create" ? "Creating…" : "New session"}
-                  busy={busyAction() === "create"}
+                  label={isBusy("create") ? "Creating…" : "New session"}
+                  busy={isBusy("create")}
                   onPress={() => void createSession()}
-                  disabled={busyAction() === "create" || connectionState() !== "online"}
+                  disabled={isBusy("create") || connectionState() !== "online"}
                 />
               </If>
               <Button
                 variant="primary"
                 size="sm"
-                label={busyAction() === "send" ? "Sending…" : "Send"}
-                busy={busyAction() === "send"}
+                label={isBusy("send") ? "Sending…" : "Send"}
+                busy={isBusy("send")}
                 onPress={() => void sendPrompt()}
                 disabled={!canSend()}
                 accessibilityLabel="Send message to Forge"

@@ -1,10 +1,21 @@
-import { effect, Scroll, Text, View } from "nsh";
-import type { ScrollRef } from "nsh";
+import { effect, Scroll, signal, Text, View } from "nsh";
+import type { ScrollEvent, ScrollRef } from "nsh";
 import { TextView } from "nsh/base";
 import { oneLine } from "../format";
-import { activeSessionId, activeSnapshot, createSession, transcriptRows } from "../store";
+import {
+  activeSessionId,
+  activeSnapshot,
+  connectionState,
+  createSession,
+  hasTranscriptRows,
+  historyRows,
+  isBusy,
+  liveAssistantRow,
+  liveReasoningRow,
+  scrollToBottomTick,
+} from "../store";
 import type { TranscriptRow } from "../store";
-import { markdownClasses, textClasses } from "../theme";
+import { elevatedShadow, markdownClasses, textClasses } from "../theme";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Surface } from "../ui/surface";
@@ -116,7 +127,9 @@ function EmptyTranscript() {
           <Button
             variant="primary"
             size="md"
-            label="Create session"
+            label={isBusy("create") ? "Creating…" : "Create session"}
+            busy={isBusy("create")}
+            disabled={isBusy("create") || connectionState() !== "online"}
             onPress={() => void createSession()}
           />
         </If>
@@ -134,32 +147,72 @@ function EmptyTranscript() {
 
 export function Transcript() {
   let scrollRef: ScrollRef | undefined;
+  const pinnedToBottom = signal(true);
+  const scrollToBottom = (animated: boolean) => {
+    pinnedToBottom.set(true);
+    scrollRef?.scrollToEnd({ animated });
+  };
   effect(() => {
-    transcriptRows();
+    scrollToBottomTick();
+    activeSessionId();
+    pinnedToBottom.set(true);
+    const frame = requestAnimationFrame(() => scrollRef?.scrollToEnd({ animated: false }));
+    return () => cancelAnimationFrame(frame);
+  });
+  effect(() => {
+    historyRows();
+    liveReasoningRow();
+    liveAssistantRow();
+    if (!pinnedToBottom()) return;
     const frame = requestAnimationFrame(() => scrollRef?.scrollToEnd({ animated: false }));
     return () => cancelAnimationFrame(frame);
   });
   return (
-    <Scroll
-      ref={(ref) => { scrollRef = ref; }}
-      class="min-h-0 flex-1"
-      contentClass="gap-4 py-5"
-      contentStyle={{ flexGrow: 1 }}
-    >
-      <If when={transcriptRows().length > 0} else={<EmptyTranscript />}>
-        <View class="gap-4">
-          <If when={activeSnapshot()?.messages.some((message) => message.role !== "system") === true}>
-            <View class="items-center pb-1">
-              <Text class={textClasses.dim}>
-                {activeSnapshot()?.title ?? "Session"} · live transcript
-              </Text>
-            </View>
-          </If>
-          <Each of={transcriptRows()} key={(row) => row.id}>
-            {(row) => <MessageRow row={row()} />}
-          </Each>
+    <View class="relative min-h-0 flex-1">
+      <Scroll
+        ref={(ref) => { scrollRef = ref; }}
+        class="min-h-0 flex-1"
+        contentClass="gap-4 py-5"
+        contentStyle={{ flexGrow: 1 }}
+        scrollEventThrottle={60}
+        onScroll={(event: ScrollEvent) => {
+          const distance = event.contentSize.height - (event.offset.y + event.size.height);
+          pinnedToBottom.set(distance <= 48);
+        }}
+      >
+        <If when={hasTranscriptRows()} else={<EmptyTranscript />}>
+          <View class="gap-4">
+            <If when={activeSnapshot()?.messages.some((message) => message.role !== "system") === true}>
+              <View class="items-center pb-1">
+                <Text class={textClasses.dim}>
+                  {activeSnapshot()?.title ?? "Session"} · live transcript
+                </Text>
+              </View>
+            </If>
+            <Each of={historyRows()} key={(row) => row.id}>
+              {(row) => <MessageRow row={row()} />}
+            </Each>
+            <If when={liveReasoningRow()}>
+              {(row) => <ReasoningRow row={row()} />}
+            </If>
+            <If when={liveAssistantRow()}>
+              {(row) => <AssistantRow row={row()} />}
+            </If>
+          </View>
+        </If>
+      </Scroll>
+      <If when={!pinnedToBottom() && hasTranscriptRows()}>
+        <View class="absolute bottom-3 right-5">
+          <Button
+            variant="secondary"
+            size="sm"
+            label="↓ Jump to bottom"
+            style={{ boxShadow: elevatedShadow() }}
+            onPress={() => scrollToBottom(true)}
+            accessibilityLabel="Jump to latest messages"
+          />
         </View>
       </If>
-    </Scroll>
+    </View>
   );
 }

@@ -59,6 +59,12 @@ function sourceKeyTone(source: PublicProviderSource): "success" | "warning" | "n
   return "warning";
 }
 
+function sourceKeyLabel(source: PublicProviderSource): string {
+  if (source.hasApiKey) return "Key saved";
+  if (source.credentials?.some((credential) => credential.type === "account")) return "Account";
+  return "No key";
+}
+
 function canWrite(): boolean {
   return settingsWritable() && !providerSaving() && !sourceActionBusy();
 }
@@ -93,7 +99,7 @@ function SourceCard(props: { source: PublicProviderSource }) {
             </If>
             <Badge
               tone={sourceKeyTone(props.source)}
-              label={props.source.hasApiKey ? "Key saved" : "No key"}
+              label={sourceKeyLabel(props.source)}
             />
           </View>
           <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
