@@ -1,0 +1,40 @@
+{
+  "name": "Forge NSH",
+  "id": "dev.ling.forge-nsh",
+  "version": "0.1.0",
+  "build": 1,
+  "appearance": "dark",
+  "theme": {
+    "cssVars": {
+      "theme": {
+        "radius": 10,
+        "background": "#090b10",
+        "foreground": "#f4f6fb",
+        "card": "#10131b",
+        "card-foreground": "#f4f6fb",
+        "popover": "#10131b",
+        "popover-foreground": "#f4f6fb",
+        "primary": "#7c5cff",
+        "primary-foreground": "#ffffff",
+        "secondary": "#171c27",
+        "secondary-foreground": "#e5e9f2",
+        "muted": "#121620",
+        "muted-foreground": "#9aa3b2",
+        "accent": "#1d2432",
+        "accent-foreground": "#f4f6fb",
+        "destructive": "#f87171",
+        "border": "#242a37",
+        "input": "#303848",
+        "ring": "#9d8cff",
+        "sidebar": "#0c0f16",
+        "sidebar-foreground": "#f4f6fb",
+        "sidebar-primary": "#7c5cff",
+        "sidebar-primary-foreground": "#ffffff",
+        "sidebar-accent": "#171c27",
+        "sidebar-accent-foreground": "#f4f6fb",
+        "sidebar-border": "#1c222e",
+        "sidebar-ring": "#9d8cff"
+      }
+    }
+  }
+}
