@@ -1,0 +1,8 @@
+.nsh/
+target/
+node_modules/
+dist/
+logs/
+pids/
+tmp/
+*.log

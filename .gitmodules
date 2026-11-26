@@ -1,0 +1,3 @@
+[submodule "vendor/forge-core"]
+	path = vendor/forge-core
+	url = https://github.com/Ling0925/forge-core.git

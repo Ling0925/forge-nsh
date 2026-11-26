@@ -1,0 +1,7 @@
+{
+  "name": "forge-nsh",
+  "id": "io.github.ling0925.forgensh",
+  "version": "0.1.0",
+  "build": 1,
+  "theme": "theme.json"
+}

@@ -1,0 +1,18 @@
+{
+  "name": "forge-nsh",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NSH web workbench with an embedded Forge Core service",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=22.23.1 <23"
+  },
+  "scripts": {
+    "setup": "git submodule update --init --recursive vendor/forge-core && pnpm -C vendor/forge-core install --frozen-lockfile && pnpm -C vendor/forge-core build",
+    "build": "pnpm -C vendor/forge-core build && nsh package App.tsx --target web --out dist/web",
+    "start": "node scripts/forge-nsh.mjs",
+    "stop": "node scripts/forge-nsh.mjs --stop",
+    "smoke": "node scripts/smoke.mjs"
+  }
+}
