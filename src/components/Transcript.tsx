@@ -1,13 +1,16 @@
 import { effect, Scroll, Text, View } from "nsh";
 import type { ScrollRef } from "nsh";
-import { Button, TextView } from "nsh/base";
+import { TextView } from "nsh/base";
 import { oneLine } from "../format";
 import { activeSessionId, activeSnapshot, createSession, transcriptRows } from "../store";
 import type { TranscriptRow } from "../store";
-import { colors, markdownClasses, textStyles } from "../theme";
+import { markdownClasses, textClasses } from "../theme";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Surface } from "../ui/surface";
 
 function StreamingCaret() {
-  return <Text style={{ color: colors.accentBright, fontSize: 15, fontWeight: "800" }}>▍</Text>;
+  return <Text class="text-sm font-bold leading-5 text-info">▍</Text>;
 }
 
 function Markdown(props: { text: string; streaming?: boolean }) {
@@ -25,23 +28,11 @@ function Markdown(props: { text: string; streaming?: boolean }) {
 
 function UserRow(props: { row: TranscriptRow }) {
   return (
-    <View style={{ alignItems: "flex-end", paddingHorizontal: 28 }}>
-      <View
-        style={{
-          maxWidth: "76%",
-          borderRadius: 16,
-          borderBottomRightRadius: 5,
-          backgroundColor: colors.userBubble,
-          borderWidth: 1,
-          borderColor: "#2b3447",
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          gap: 4,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: 14, lineHeight: 21 }}>{props.row.text}</Text>
+    <View class="items-end px-7">
+      <View class="max-w-[76%] gap-1 rounded-(--radius-xl) border border-border-subtle bg-secondary px-3.5 py-2.5">
+        <Text class="text-sm leading-5 text-secondary-foreground">{props.row.text}</Text>
         <If when={props.row.detail !== undefined}>
-          <Text style={textStyles.dim}>{props.row.detail}</Text>
+          <Text class={textClasses.dim}>{props.row.detail}</Text>
         </If>
       </View>
     </View>
@@ -50,21 +41,17 @@ function UserRow(props: { row: TranscriptRow }) {
 
 function AssistantRow(props: { row: TranscriptRow }) {
   return (
-    <View style={{ flexDirection: "row", paddingHorizontal: 28, gap: 12, alignItems: "flex-start" }}>
+    <View class="flex-row items-start gap-3 px-7">
       <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          backgroundColor: props.row.live ? colors.accent : "#283041",
-          alignItems: "center",
-          justifyContent: "center",
-          marginTop: 2,
-        }}
+        class={`mt-0.5 size-7 items-center justify-center rounded-(--radius) border ${
+          props.row.live
+            ? "border-info-border bg-info-soft"
+            : "border-primary-border bg-primary-soft"
+        }`}
       >
-        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "800" }}>F</Text>
+        <Text class={`text-xs font-bold leading-4 ${props.row.live ? "text-info-foreground" : "text-primary"}`}>F</Text>
       </View>
-      <View style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+      <View class="min-w-0 flex-1 pt-0.5">
         <Markdown text={props.row.text} streaming={props.row.live} />
       </View>
     </View>
@@ -73,50 +60,29 @@ function AssistantRow(props: { row: TranscriptRow }) {
 
 function ReasoningRow(props: { row: TranscriptRow }) {
   return (
-    <View style={{ paddingHorizontal: 68 }}>
-      <View
-        style={{
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#262e3e",
-          backgroundColor: "#0e121a",
-          paddingHorizontal: 12,
-          paddingVertical: 9,
-          gap: 4,
-          opacity: 0.86,
-        }}
-      >
-        <Text style={textStyles.eyebrow}>{props.row.live ? "Reasoning live" : "Reasoning"}</Text>
-        <Text style={{ color: "#8f99ab", fontSize: 12, lineHeight: 17 }}>{props.row.text}</Text>
-      </View>
+    <View class="px-7">
+      <Surface variant="inset" class="ms-10 gap-1 px-3 py-2.5 opacity-90">
+        <Text class={textClasses.eyebrow}>{props.row.live ? "Reasoning live" : "Reasoning"}</Text>
+        <Text class="text-xs leading-4 text-muted-foreground">{props.row.text}</Text>
+      </Surface>
     </View>
   );
 }
 
 function ToolRow(props: { row: TranscriptRow }) {
   return (
-    <View style={{ paddingHorizontal: 68 }}>
-      <View
-        style={{
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#293242",
-          backgroundColor: colors.code,
-          paddingHorizontal: 12,
-          paddingVertical: 9,
-          gap: 5,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accentBright }} />
-          <Text style={{ color: "#aeb7c7", fontSize: 11, fontWeight: "700", letterSpacing: 0.5 }}>
+    <View class="px-7">
+      <Surface variant="code" class="ms-10 gap-1.5 px-3 py-2.5">
+        <View class="flex-row items-center gap-2">
+          <View class="size-1.5 rounded-full bg-info" />
+          <Text class="text-xs font-bold uppercase leading-4 tracking-wide text-info-foreground">
             {props.row.detail ?? "TOOL"}
           </Text>
         </View>
-        <Text style={{ color: "#c5ccd9", fontSize: 12, lineHeight: 17, fontFamily: "monospace" }}>
+        <Text class="font-mono text-xs leading-4 text-code-foreground">
           {oneLine(props.row.text, 900)}
         </Text>
-      </View>
+      </Surface>
     </View>
   );
 }
@@ -131,27 +97,16 @@ function MessageRow(props: { row: TranscriptRow }) {
 function EmptyTranscript() {
   const hasSession = () => activeSessionId() !== undefined;
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 34 }}>
-      <View style={{ maxWidth: 560, alignItems: "center", gap: 18 }}>
-        <View
-          style={{
-            width: 58,
-            height: 58,
-            borderRadius: 17,
-            backgroundColor: colors.accentSoft,
-            borderWidth: 1,
-            borderColor: "#453781",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: colors.accentBright, fontSize: 25, fontWeight: "800" }}>F</Text>
+    <View class="flex-1 items-center justify-center p-8">
+      <View class="max-w-[560px] items-center gap-5">
+        <View class="size-14 items-center justify-center rounded-(--radius-xl) border border-primary-border bg-primary-soft">
+          <Text class="text-xl font-bold leading-7 text-primary">F</Text>
         </View>
-        <View style={{ alignItems: "center", gap: 7 }}>
-          <Text style={{ color: colors.text, fontSize: 22, fontWeight: "750", letterSpacing: -0.3 }}>
+        <View class="items-center gap-2">
+          <Text class={textClasses.heading} style={{ textAlign: "center" }}>
             {hasSession() ? "Start the first run" : "A Forge workbench in NSH"}
           </Text>
-          <Text style={{ ...textStyles.small, textAlign: "center", lineHeight: 20 }}>
+          <Text class={`${textClasses.small} text-center leading-5`}>
             {hasSession()
               ? "Ask Forge to inspect, explain or change the workspace. Responses stream here as Markdown; tool activity is summarized."
               : "Create a session to connect this native-shell interface with the embedded Forge Core runtime."}
@@ -159,29 +114,17 @@ function EmptyTranscript() {
         </View>
         <If when={!hasSession()}>
           <Button
+            variant="primary"
+            size="md"
+            label="Create session"
             onPress={() => void createSession()}
-            style={{
-              borderRadius: 10,
-              backgroundColor: colors.accent,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-            }}
-            hoverStyle={{ backgroundColor: "#8d72ff" }}
-          >
-            <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "700" }}>Create session</Text>
-          </Button>
+          />
         </If>
         <If when={hasSession()}>
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            <Text style={{ ...textStyles.dim, borderRadius: 999, borderWidth: 1, borderColor: colors.borderSoft, paddingHorizontal: 10, paddingVertical: 5 }}>
-              Markdown transcript
-            </Text>
-            <Text style={{ ...textStyles.dim, borderRadius: 999, borderWidth: 1, borderColor: colors.borderSoft, paddingHorizontal: 10, paddingVertical: 5 }}>
-              Cursor acknowledgements
-            </Text>
-            <Text style={{ ...textStyles.dim, borderRadius: 999, borderWidth: 1, borderColor: colors.borderSoft, paddingHorizontal: 10, paddingVertical: 5 }}>
-              Approval flow
-            </Text>
+          <View class="flex-row flex-wrap justify-center gap-2">
+            <Badge tone="neutral" label="Markdown transcript" />
+            <Badge tone="neutral" label="Cursor acknowledgements" />
+            <Badge tone="neutral" label="Approval flow" />
           </View>
         </If>
       </View>
@@ -199,14 +142,15 @@ export function Transcript() {
   return (
     <Scroll
       ref={(ref) => { scrollRef = ref; }}
-      style={{ flex: 1, minHeight: 0 }}
-      contentStyle={{ flexGrow: 1, paddingVertical: 22, gap: 18 }}
+      class="min-h-0 flex-1"
+      contentClass="gap-4 py-5"
+      contentStyle={{ flexGrow: 1 }}
     >
       <If when={transcriptRows().length > 0} else={<EmptyTranscript />}>
-        <View style={{ gap: 18 }}>
+        <View class="gap-4">
           <If when={activeSnapshot()?.messages.some((message) => message.role !== "system") === true}>
-            <View style={{ alignItems: "center", paddingBottom: 2 }}>
-              <Text style={textStyles.dim}>
+            <View class="items-center pb-1">
+              <Text class={textClasses.dim}>
                 {activeSnapshot()?.title ?? "Session"} · live transcript
               </Text>
             </View>

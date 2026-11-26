@@ -1,81 +1,52 @@
-import type { TextStyle, ViewStyle } from "nsh";
+import { token } from "nsh";
 
-export const colors = {
-  canvas: "#090b10",
-  sidebar: "#0c0f16",
-  panel: "#10131b",
-  panelRaised: "#151923",
-  panelSoft: "#121620",
-  border: "#242a37",
-  borderSoft: "#1c222e",
-  text: "#f4f6fb",
-  textMuted: "#9aa3b2",
-  textDim: "#697283",
-  accent: "#7c5cff",
-  accentBright: "#9d8cff",
-  accentSoft: "#241d4d",
-  success: "#34d399",
-  warning: "#fbbf24",
-  danger: "#f87171",
-  userBubble: "#1d2432",
-  code: "#0a0d13",
-};
+/**
+ * Shared presentation tokens for the Forge workbench.
+ *
+ * Colors, radii and fonts themselves live in nsh.json. Feature components use
+ * these semantic class groups instead of inventing local visual values.
+ */
+export const textClasses = {
+  eyebrow: "text-xs font-bold uppercase leading-4 tracking-wider text-dim-foreground",
+  body: "text-sm leading-5 text-foreground",
+  small: "text-xs leading-4 text-muted-foreground",
+  dim: "text-xs leading-4 text-dim-foreground",
+  title: "text-base font-semibold leading-6 text-foreground",
+  heading: "text-xl font-bold leading-7 tracking-tight text-foreground",
+  mono: "font-mono text-xs leading-4 text-secondary-foreground",
+} as const;
 
-export const textStyles = {
-  eyebrow: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.9,
-    textTransform: "uppercase",
-  },
-  body: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  small: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  dim: {
-    color: colors.textDim,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: "650",
-    lineHeight: 23,
-  },
-} satisfies Record<string, TextStyle>;
+export const motionClasses = {
+  color: "transition-colors duration-150 motion-reduce:transition-none",
+  all: "transition-all duration-150 motion-reduce:transition-none",
+} as const;
 
-export const panelStyle: ViewStyle = {
-  backgroundColor: colors.panel,
-  borderColor: colors.borderSoft,
-  borderWidth: 1,
-  borderRadius: 14,
-};
+export const focusRingClass = "focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2";
 
-export const buttonBase: ViewStyle = {
-  borderRadius: 9,
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  alignItems: "center",
-  justifyContent: "center",
-};
+export const surfaceClasses = {
+  panel: "rounded-(--radius-lg) border border-border-subtle bg-card",
+  soft: "rounded-(--radius-lg) border border-border-subtle bg-surface-soft",
+  inset: "rounded-(--radius-lg) border border-border-subtle bg-surface-inset",
+  overlay: "rounded-(--radius-xl) border border-border bg-surface-overlay",
+  code: "rounded-(--radius) border border-code-border bg-code",
+  warning: "rounded-(--radius-lg) border border-warning-border bg-warning-soft",
+  danger: "rounded-(--radius-lg) border border-danger-border bg-danger-soft",
+} as const;
+
+/** A quiet elevation cue for the one floating input surface. */
+export function elevatedShadow(): string {
+  return `0 16px 38px ${token("shadow-color")}`;
+}
 
 export const markdownClasses = {
-  root: "gap-3 text-[14px] leading-6 text-zinc-200",
-  paragraph: "text-zinc-200",
-  heading: "text-zinc-50",
-  code: "rounded bg-[#1b2130] px-1 py-0.5 text-[12px] text-violet-200",
-  codeBlock: "rounded-xl border border-[#252c3c] bg-[#080a0f]",
-  codeBlockCode: "text-[12px] leading-5 text-zinc-200",
-  blockquote: "border-l-2 border-violet-500 pl-3 text-zinc-300",
-  listMarker: "text-violet-300",
-  link: "text-violet-300 underline",
-  table: "border-[#252c3c]",
+  root: "gap-3 text-sm leading-6 text-foreground",
+  paragraph: "text-foreground",
+  heading: "font-semibold text-foreground",
+  code: "rounded-(--radius-sm) border border-code-border bg-code px-1 py-0.5 font-mono text-xs text-info-foreground",
+  codeBlock: "overflow-hidden rounded-(--radius-lg) border border-code-border bg-code",
+  codeBlockCode: "font-mono text-xs leading-5 text-code-foreground",
+  blockquote: "border-l-2 border-primary-border pl-3 text-muted-foreground",
+  listMarker: "text-primary",
+  link: "text-info-foreground underline",
+  table: "border-code-border",
 };

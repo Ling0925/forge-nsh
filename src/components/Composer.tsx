@@ -1,5 +1,5 @@
 import { Text, View } from "nsh";
-import { Button, Input } from "nsh/base";
+import { Input } from "nsh/base";
 import { clampText, oneLine } from "../format";
 import {
   activeRun,
@@ -15,7 +15,9 @@ import {
   sendPrompt,
   socketState,
 } from "../store";
-import { colors, textStyles } from "../theme";
+import { elevatedShadow, textClasses } from "../theme";
+import { Button } from "../ui/button";
+import { Surface } from "../ui/surface";
 
 function isWorking(status: string | undefined): boolean {
   return status === "running" || status === "awaiting_approval";
@@ -25,83 +27,67 @@ function ApprovalCard() {
   const approval = () => activeRun().pendingApproval;
   return (
     <If when={approval() !== undefined}>
-      <View
-        style={{
-          marginHorizontal: 18,
-          marginBottom: 10,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: "#714c24",
-          backgroundColor: "#201812",
-          padding: 13,
-          gap: 10,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
-          <View
-            style={{
-              width: 25,
-              height: 25,
-              borderRadius: 8,
-              backgroundColor: "#573916",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: colors.warning, fontSize: 13, fontWeight: "900" }}>!</Text>
+      <View class="mx-4 mb-2">
+        <Surface variant="warning" class="gap-3 p-3">
+          <View class="flex-row items-center gap-2.5">
+            <View class="size-6 items-center justify-center rounded-(--radius) bg-warning">
+              <Text class="text-xs font-black leading-4 text-primary-foreground">!</Text>
+            </View>
+            <View class="min-w-0 flex-1 gap-0.5">
+              <Text class="text-sm font-semibold leading-5 text-foreground">
+                Approval required · {approval()?.toolName ?? "tool"}
+              </Text>
+              <Text class={textClasses.dim}>Forge is paused until you decide.</Text>
+            </View>
           </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>
-              Approval required · {approval()?.toolName ?? "tool"}
-            </Text>
-            <Text style={textStyles.dim}>Forge is paused until you decide.</Text>
+          <Text class="text-xs leading-4 text-warning-foreground">
+            {clampText(approval()?.description ?? "", 700)}
+          </Text>
+          <If when={(approval()?.command?.length ?? 0) > 0}>
+            <Surface variant="code" class="px-2.5 py-2">
+              <Text class="font-mono text-xs leading-4 text-code-foreground">
+                {oneLine(approval()?.command?.join(" ") ?? "", 240)}
+              </Text>
+            </Surface>
+          </If>
+          <View class="flex-row justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              label="Deny"
+              onPress={() => void answerApproval(false)}
+              disabled={busyAction() === "approval"}
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              label="Approve"
+              busy={busyAction() === "approval"}
+              onPress={() => void answerApproval(true)}
+              disabled={busyAction() === "approval"}
+            />
           </View>
-        </View>
-        <Text style={{ color: "#d7c7b2", fontSize: 12, lineHeight: 17 }}>
-          {clampText(approval()?.description ?? "", 700)}
-        </Text>
-        <If when={(approval()?.command?.length ?? 0) > 0}>
-          <View style={{ borderRadius: 9, backgroundColor: "#100d0a", paddingHorizontal: 10, paddingVertical: 8 }}>
-            <Text style={{ color: "#f0d8b5", fontSize: 12, fontFamily: "monospace" }}>
-              {oneLine(approval()?.command?.join(" ") ?? "", 240)}
-            </Text>
-          </View>
-        </If>
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-          <Button
-            onPress={() => void answerApproval(false)}
-            disabled={busyAction() === "approval"}
-            style={{
-              borderRadius: 9,
-              paddingHorizontal: 13,
-              paddingVertical: 8,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: "#171a21",
-            }}
-            hoverStyle={{ backgroundColor: "#1d212a" }}
-          >
-            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: "700" }}>Deny</Text>
-          </Button>
-          <Button
-            onPress={() => void answerApproval(true)}
-            disabled={busyAction() === "approval"}
-            style={{
-              borderRadius: 9,
-              paddingHorizontal: 13,
-              paddingVertical: 8,
-              backgroundColor: colors.warning,
-              opacity: busyAction() === "approval" ? 0.6 : 1,
-            }}
-            hoverStyle={{ backgroundColor: "#facc15" }}
-          >
-            <Text style={{ color: "#171106", fontSize: 13, fontWeight: "800" }}>Approve</Text>
-          </Button>
-        </View>
+        </Surface>
       </View>
     </If>
   );
 }
+
+type StatusTone = "neutral" | "info" | "warning" | "danger";
+
+const statusTextClasses: Record<StatusTone, string> = {
+  neutral: "text-dim-foreground",
+  info: "text-info-foreground",
+  warning: "text-warning-foreground",
+  danger: "text-danger-foreground",
+};
+
+const statusDotClasses: Record<StatusTone, string> = {
+  neutral: "bg-dim-foreground",
+  info: "bg-info",
+  warning: "bg-warning",
+  danger: "bg-danger",
+};
 
 function StatusLine() {
   const run = () => activeRun();
@@ -115,30 +101,23 @@ function StatusLine() {
     if (activeSessionId()) return "Ready";
     return "Create or select a session";
   };
-  const tone = () => run().error || lastError()
-    ? colors.danger
+  const tone = (): StatusTone => run().error || lastError()
+    ? "danger"
     : connectionState() !== "online" || socketState() !== "live"
-      ? colors.warning
+      ? "warning"
       : run().activity || run().currentTool
-        ? colors.accentBright
-        : colors.textDim;
+        ? "info"
+        : "neutral";
   return (
-    <View style={{ minHeight: 22, justifyContent: "center", paddingHorizontal: 4 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <If when={isWorking(run().status)}>
-          <View
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: 4,
-              backgroundColor: colors.accentBright,
-              animationName: "pulse",
-              animationDuration: "1.2s",
-              animationIterationCount: "infinite",
-            }}
-          />
-        </If>
-        <Text style={{ color: tone(), fontSize: 12, lineHeight: 17, numberOfLines: 1, textOverflow: "ellipsis" }}>
+    <View class="min-h-6 justify-center px-1">
+      <View class="flex-row items-center gap-2">
+        <View
+          class={`size-2 rounded-full ${statusDotClasses[tone()]} ${isWorking(run().status) ? "animate-pulse motion-reduce:animate-none" : ""}`}
+        />
+        <Text
+          class={`text-xs leading-4 ${statusTextClasses[tone()]}`}
+          style={{ numberOfLines: 1, textOverflow: "ellipsis" }}
+        >
           {text()}
         </Text>
       </View>
@@ -155,29 +134,14 @@ export function Composer() {
     && busyAction() !== "send"
     && connectionState() === "online";
   return (
-    <View
-      style={{
-        borderTopWidth: 1,
-        borderTopColor: colors.borderSoft,
-        backgroundColor: "#0d1017",
-        paddingHorizontal: 18,
-        paddingTop: 9,
-        paddingBottom: 14,
-      }}
-    >
+    <View class="border-t border-border-subtle bg-surface-soft px-4 pb-3 pt-2">
       <ApprovalCard />
-      <View style={{ maxWidth: 920, width: "100%", alignSelf: "center", gap: 7 }}>
+      <View class="w-full max-w-[920px] gap-2 self-center">
         <StatusLine />
-        <View
-          style={{
-            borderRadius: 17,
-            borderWidth: 1,
-            borderColor: "#303848",
-            backgroundColor: "#131824",
-            padding: 8,
-            gap: 8,
-            boxShadow: "0 14px 34px rgba(0, 0, 0, 0.24)",
-          }}
+        <Surface
+          variant="overlay"
+          class="gap-2 p-2"
+          style={{ boxShadow: elevatedShadow() }}
         >
           <Input
             multiline
@@ -186,81 +150,54 @@ export function Composer() {
             onSubmit={() => void sendPrompt()}
             submitBehavior="submit"
             readonly={!hasSession()}
+            accessibilityLabel={hasSession() ? `Message ${activeSnapshot()?.title ?? "Forge"}` : "Message Forge"}
             placeholder={hasSession()
               ? `Message ${activeSnapshot()?.title ?? "Forge"}…`
               : "Create a session before messaging Forge…"}
-            style={{
-              minHeight: 64,
-              maxHeight: 150,
-              color: colors.text,
-              fontSize: 14,
-              lineHeight: 20,
-              paddingHorizontal: 7,
-              placeholderColor: "#626c7d",
-              caretColor: colors.accentBright,
-              selectionColor: "#4b3c92",
+            class="rounded-(--radius-sm) px-1.5 text-sm leading-5 text-foreground caret-primary placeholder:text-dim-foreground selection:bg-selection focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+            classList={{
+              "bg-transparent": hasSession(),
+              "bg-surface-inset": !hasSession(),
             }}
+            style={{ minHeight: 64, maxHeight: 144 }}
           />
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <Text style={textStyles.dim}>
+          <View class="flex-row flex-wrap items-center justify-between gap-2">
+            <Text class={textClasses.dim}>
               Enter sends · Shift+Enter inserts a newline
             </Text>
-            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <View class="flex-row flex-wrap items-center justify-end gap-2">
               <If when={running()}>
                 <Button
+                  variant="danger"
+                  size="sm"
+                  label={busyAction() === "cancel" ? "Cancelling…" : "Cancel"}
+                  busy={busyAction() === "cancel"}
                   onPress={() => void cancelActive()}
                   disabled={busyAction() === "cancel"}
-                  style={{
-                    borderRadius: 9,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderWidth: 1,
-                    borderColor: "#51343a",
-                    backgroundColor: "#211419",
-                  }}
-                  hoverStyle={{ backgroundColor: "#2b181f" }}
-                >
-                  <Text style={{ color: "#fda4af", fontSize: 13, fontWeight: "700" }}>
-                    {busyAction() === "cancel" ? "Cancelling…" : "Cancel"}
-                  </Text>
-                </Button>
+                />
               </If>
               <If when={!hasSession()}>
                 <Button
+                  variant="soft"
+                  size="sm"
+                  label={busyAction() === "create" ? "Creating…" : "New session"}
+                  busy={busyAction() === "create"}
                   onPress={() => void createSession()}
                   disabled={busyAction() === "create" || connectionState() !== "online"}
-                  style={{
-                    borderRadius: 9,
-                    paddingHorizontal: 13,
-                    paddingVertical: 8,
-                    backgroundColor: colors.accent,
-                    opacity: connectionState() === "online" ? 1 : 0.55,
-                  }}
-                  hoverStyle={{ backgroundColor: "#8d72ff" }}
-                >
-                  <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "800" }}>New session</Text>
-                </Button>
+                />
               </If>
               <Button
+                variant="primary"
+                size="sm"
+                label={busyAction() === "send" ? "Sending…" : "Send"}
+                busy={busyAction() === "send"}
                 onPress={() => void sendPrompt()}
                 disabled={!canSend()}
                 accessibilityLabel="Send message to Forge"
-                style={{
-                  borderRadius: 9,
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  backgroundColor: canSend() ? colors.accent : "#2a3040",
-                  opacity: busyAction() === "send" ? 0.7 : 1,
-                }}
-                hoverStyle={{ backgroundColor: canSend() ? "#8d72ff" : "#2a3040" }}
-              >
-                <Text style={{ color: canSend() ? "#ffffff" : "#707a8c", fontSize: 13, fontWeight: "800" }}>
-                  {busyAction() === "send" ? "Sending…" : "Send"}
-                </Text>
-              </Button>
+              />
             </View>
           </View>
-        </View>
+        </Surface>
       </View>
     </View>
   );

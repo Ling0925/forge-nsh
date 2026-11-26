@@ -14,33 +14,39 @@ import {
   socketState,
   workspace,
 } from "../store";
-import { colors, textStyles } from "../theme";
+import { textClasses } from "../theme";
+import { Surface } from "../ui/surface";
 
 function Section(props: { title: string; children?: JSX.Element }) {
   return (
-    <View style={{ paddingHorizontal: 16, paddingVertical: 13, gap: 10 }}>
-      <Text style={textStyles.eyebrow}>{props.title}</Text>
-      <View style={{ gap: 8 }}>{props.children}</View>
+    <View class="gap-2.5 px-4 py-3" role="group">
+      <Text class={textClasses.eyebrow} role="header" accessibilityLevel={2}>{props.title}</Text>
+      <View class="gap-2">{props.children}</View>
     </View>
   );
 }
 
-function Fact(props: { label: string; value: string; tone?: string; mono?: boolean }) {
+type FactTone = "neutral" | "dim" | "info" | "success" | "warning" | "danger";
+
+const factToneClasses: Record<FactTone, string> = {
+  neutral: "text-secondary-foreground",
+  dim: "text-dim-foreground",
+  info: "text-info-foreground",
+  success: "text-success-foreground",
+  warning: "text-warning-foreground",
+  danger: "text-danger-foreground",
+};
+
+function Fact(props: { label: string; value: string; tone?: FactTone; mono?: boolean }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-      <View style={{ width: 82, flexShrink: 0 }}>
-        <Text style={{ ...textStyles.dim, numberOfLines: 1 }}>{props.label}</Text>
+    <View class="flex-row items-start gap-2.5">
+      <View style={{ width: 84, flexShrink: 0 }}>
+        <Text class={textClasses.dim} style={{ numberOfLines: 1 }}>{props.label}</Text>
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View class="min-w-0 flex-1">
         <Text
-          style={{
-            color: props.tone ?? "#c8cfdb",
-            fontSize: 12,
-            lineHeight: 17,
-            fontFamily: props.mono ? "monospace" : undefined,
-            numberOfLines: 2,
-            textOverflow: "ellipsis",
-          }}
+          class={`text-xs leading-4 ${props.mono ? "font-mono " : ""}${factToneClasses[props.tone ?? "neutral"]}`}
+          style={{ numberOfLines: 2, textOverflow: "ellipsis" }}
         >
           {props.value}
         </Text>
@@ -50,7 +56,7 @@ function Fact(props: { label: string; value: string; tone?: string; mono?: boole
 }
 
 function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.borderSoft }} />;
+  return <View class="h-px bg-border-subtle" />;
 }
 
 export function Inspector() {
@@ -64,32 +70,28 @@ export function Inspector() {
   const connectionText = () => connectionState() === "online"
     ? socketState() === "live" ? "online · events live" : "online · events connecting"
     : "offline";
-  const connectionTone = () => connectionState() === "online" && socketState() === "live"
-    ? colors.success
-    : connectionState() === "online" ? colors.warning : colors.danger;
-  const statusTone = () => {
+  const connectionTone = (): FactTone => connectionState() === "online" && socketState() === "live"
+    ? "success"
+    : connectionState() === "online" ? "warning" : "danger";
+  const statusTone = (): FactTone => {
     const status = activeRun().status ?? activeSnapshot()?.status;
-    if (status === "running" || status === "awaiting_approval") return colors.accentBright;
-    if (status === "failed" || status === "cancelled" || status === "interrupted") return colors.danger;
-    if (status === "completed") return colors.success;
-    return colors.textMuted;
+    if (status === "running") return "info";
+    if (status === "awaiting_approval") return "warning";
+    if (status === "failed" || status === "cancelled" || status === "interrupted") return "danger";
+    if (status === "completed") return "success";
+    return "dim";
   };
   return (
     <View
-      style={{
-        width: 302,
-        height: "100%",
-        backgroundColor: "#0c0f15",
-        borderLeftWidth: 1,
-        borderLeftColor: colors.borderSoft,
-      }}
+      class="h-full border-l border-sidebar-border bg-sidebar"
+      style={{ width: 300 }}
     >
-      <View style={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12, gap: 4 }}>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "750" }}>Inspector</Text>
-        <Text style={textStyles.dim}>Connection, workspace and run state</Text>
+      <View class="gap-1 px-4 pb-3 pt-4">
+        <Text class="text-base font-bold leading-5 tracking-tight text-sidebar-foreground">Inspector</Text>
+        <Text class={textClasses.dim}>Connection, workspace and run state</Text>
       </View>
       <Divider />
-      <Scroll style={{ flex: 1 }}>
+      <Scroll class="min-h-0 flex-1">
         <Section title="Connection">
           <Fact label="State" value={connectionText()} tone={connectionTone()} />
           <Fact label="Client" value={shortId(connectInfo()?.clientId)} mono />
@@ -98,7 +100,7 @@ export function Inspector() {
           <Fact
             label="Provider"
             value={coreSettings()?.isConfigured ? "configured" : "not configured"}
-            tone={coreSettings()?.isConfigured ? colors.success : colors.warning}
+            tone={coreSettings()?.isConfigured ? "success" : "warning"}
           />
           <Fact label="Models" value={String(availableModels().length)} mono />
         </Section>
@@ -133,22 +135,13 @@ export function Inspector() {
           <Fact label="Last event" value={formatTime(activeSnapshot()?.updatedAt)} />
         </Section>
         <Divider />
-        <View style={{ padding: 16, gap: 8 }}>
-          <View
-            style={{
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#43320f",
-              backgroundColor: "#191309",
-              padding: 11,
-              gap: 5,
-            }}
-          >
-            <Text style={{ color: colors.warning, fontSize: 12, fontWeight: "800" }}>Trusted LAN only</Text>
-            <Text style={{ color: "#b8a586", fontSize: 11, lineHeight: 16 }}>
+        <View class="p-4">
+          <Surface variant="warning" class="gap-1.5 p-3">
+            <Text class="text-xs font-bold leading-4 text-warning-foreground">Trusted LAN only</Text>
+            <Text class="text-xs leading-4 text-muted-foreground">
               HTTP is not encrypted. Anyone who can reach this port can use the embedded Forge Core.
             </Text>
-          </View>
+          </Surface>
         </View>
       </Scroll>
     </View>
