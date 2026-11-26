@@ -42,6 +42,21 @@ export interface ToolCall {
   };
 }
 
+export interface FileChangeSummary {
+  path: string;
+  kind: "created" | "modified" | "deleted";
+  patch?: {
+    added?: number;
+    removed?: number;
+    status?: string;
+  };
+}
+
+export interface MessageCitation {
+  title?: string;
+  url: string;
+}
+
 export type Message =
   | { role: "system"; content: string }
   | {
@@ -55,6 +70,7 @@ export type Message =
       content: string | null;
       reasoning?: string;
       generationId?: string;
+      citations?: readonly MessageCitation[];
       tool_calls?: ToolCall[];
     }
   | { role: "tool"; content: string; tool_call_id: string };
@@ -103,6 +119,7 @@ export interface AgentEvent {
   approvalId?: string;
   approved?: boolean;
   call?: ToolCall;
+  toolCallId?: string;
   previewId?: string;
   name?: string;
   argumentsChars?: number;
@@ -117,7 +134,7 @@ export interface AgentEvent {
     usedTokens?: number;
     estimated?: boolean;
   };
-  result?: { content?: string; isError?: boolean };
+  result?: { content?: string; isError?: boolean; changes?: readonly FileChangeSummary[] };
   [key: string]: unknown;
 }
 

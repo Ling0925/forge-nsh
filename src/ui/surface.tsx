@@ -8,7 +8,7 @@ export interface SurfaceProps extends ViewProps {
   variant?: SurfaceVariant;
 }
 
-/** A semantic bordered surface; callers add layout, spacing and content. */
+/** Single-layer surface container; never nest surfaces inside surfaces. */
 export function Surface(props: SurfaceProps) {
   const [own, rest] = split(props, ["variant", "class", "children"]);
   return (

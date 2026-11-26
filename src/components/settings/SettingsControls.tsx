@@ -3,6 +3,7 @@ import type { JSX } from "nsh";
 import { Input, type InputProps } from "nsh/base";
 import type { SaveStatus } from "../../settings/common";
 import { focusRingClass, textClasses } from "../../theme";
+import { Icon } from "../../ui/icon";
 import { Surface } from "../../ui/surface";
 
 export function SettingsInput(props: InputProps & { invalid?: boolean }) {
@@ -11,7 +12,7 @@ export function SettingsInput(props: InputProps & { invalid?: boolean }) {
     <Input
       {...rest}
       readonly={own.readonly}
-      class={`min-h-9 w-full rounded-(--radius) border px-3 py-2 text-sm leading-5 caret-primary placeholder:text-dim-foreground selection:bg-selection ${
+      class={`min-h-9 w-full rounded-(--radius) border px-3 py-2 text-[14px] leading-5 caret-primary placeholder:text-dim-foreground selection:bg-selection ${
         own.readonly
           ? "border-border-subtle bg-control-disabled text-control-disabled-foreground"
           : `${own.invalid ? "border-danger" : "border-input"} bg-surface-inset text-foreground`
@@ -22,56 +23,50 @@ export function SettingsInput(props: InputProps & { invalid?: boolean }) {
 
 export function Field(props: {
   label: string;
-  description?: string;
   error?: string;
   children?: JSX.Element;
 }) {
   return (
-    <View class="min-w-0 gap-1.5" role="group">
-      <Text class="text-sm font-semibold leading-5 text-foreground">{props.label}</Text>
+    <View class="min-w-0 gap-2" role="group">
+      <Text class="text-[14px] font-medium leading-5 text-foreground">{props.label}</Text>
       {props.children}
-      <If when={props.description !== undefined || props.error !== undefined}>
-        <Text class={props.error ? "text-xs leading-4 text-danger-foreground" : textClasses.dim}>
-          {props.error ?? props.description}
+      <If when={props.error !== undefined}>
+        <Text class="text-[14px] leading-5 text-danger-foreground" role="alert">
+          {props.error}
         </Text>
       </If>
     </View>
   );
 }
 
+/** Borderless single-layer settings section separated by generous whitespace. */
 export function SettingsGroup(props: {
   title: string;
-  description?: string;
   actions?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
-    <Surface variant="panel" class="gap-4 p-4">
-      <View class="flex-row flex-wrap items-start justify-between gap-3">
-        <View class="min-w-0 flex-1 gap-1">
-          <Text class={textClasses.title}>{props.title}</Text>
-          <If when={props.description !== undefined}>
-            <Text class={textClasses.small}>{props.description}</Text>
-          </If>
-        </View>
+    <View class="gap-6">
+      <View class="flex-row flex-wrap items-center justify-between gap-4">
+        <Text class={textClasses.title}>{props.title}</Text>
         {props.actions}
       </View>
-      {props.children}
-    </Surface>
+      <View class="gap-6">{props.children}</View>
+    </View>
   );
 }
 
 const statusDot: Record<SaveStatus["state"], string> = {
-  idle: "bg-dim-foreground",
-  saving: "bg-info animate-pulse motion-reduce:animate-none",
-  saved: "bg-success",
+  idle: "bg-muted-foreground",
+  saving: "bg-primary animate-pulse motion-reduce:animate-none",
+  saved: "bg-foreground",
   error: "bg-danger",
 };
 
 const statusText: Record<SaveStatus["state"], string> = {
-  idle: "text-dim-foreground",
-  saving: "text-info-foreground",
-  saved: "text-success-foreground",
+  idle: "text-muted-foreground",
+  saving: "text-foreground",
+  saved: "text-foreground",
   error: "text-danger-foreground",
 };
 
@@ -87,9 +82,9 @@ export function SaveStatusLine(props: { status: SaveStatus; idleText?: string })
   );
   return (
     <If when={text().length > 0}>
-      <View class="min-h-5 flex-row items-center gap-2">
+      <View class="min-h-6 flex-row items-center gap-2">
         <View class={`size-2 rounded-full ${statusDot[props.status.state]}`} />
-        <Text class={`text-xs leading-4 ${statusText[props.status.state]}`}>{text()}</Text>
+        <Text class={`text-[14px] leading-5 ${statusText[props.status.state]}`}>{text()}</Text>
       </View>
     </If>
   );
@@ -98,12 +93,15 @@ export function SaveStatusLine(props: { status: SaveStatus; idleText?: string })
 export function ValidationList(props: { errors: readonly string[] }) {
   return (
     <If when={props.errors.length > 0}>
-      <Surface variant="danger" class="gap-1.5 px-3 py-2.5" role="alert">
-        <Text class="text-xs font-bold uppercase leading-4 tracking-wider text-danger-foreground">
-          Check these values
-        </Text>
+      <Surface variant="danger" class="gap-2 p-4" role="alert">
+        <View class="flex-row items-center gap-2">
+          <Icon name="alert" tone="danger" />
+          <Text class="text-[14px] font-semibold leading-5 text-danger-foreground">
+            Check these values
+          </Text>
+        </View>
         <Each of={props.errors} key={(error) => error}>
-          {(error) => <Text class="text-xs leading-4 text-danger-foreground">• {error()}</Text>}
+          {(error) => <Text class="text-[14px] leading-5 text-danger-foreground">• {error()}</Text>}
         </Each>
       </Surface>
     </If>

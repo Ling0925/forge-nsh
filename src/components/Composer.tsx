@@ -10,45 +10,38 @@ import {
   cancelActive,
   composerText,
   connectionState,
-  createSession,
   isBusy,
   isWorkingStatus,
   lastError,
   sendPrompt,
   socketState,
 } from "../store";
-import { elevatedShadow, textClasses } from "../theme";
+import { elevatedShadow } from "../theme";
 import { Button } from "../ui/button";
+import { Icon } from "../ui/icon";
 import { Surface } from "../ui/surface";
 
 function ApprovalCard() {
   const approval = () => activeRun().pendingApproval;
   return (
     <If when={approval() !== undefined}>
-      <View class="mx-4 mb-2">
-        <Surface variant="warning" class="gap-3 p-3">
-          <View class="flex-row items-center gap-2.5">
-            <View class="size-6 items-center justify-center rounded-(--radius) bg-warning">
-              <Text class="text-xs font-black leading-4 text-primary-foreground">!</Text>
-            </View>
-            <View class="min-w-0 flex-1 gap-0.5">
-              <Text class="text-sm font-semibold leading-5 text-foreground">
-                Approval required · {approval()?.toolName ?? "tool"}
-              </Text>
-              <Text class={textClasses.dim}>Forge is paused until you decide.</Text>
-            </View>
+      <View class="mx-auto mb-4 w-full max-w-[840px]">
+        <Surface variant="soft" class="gap-4 p-6">
+          <View class="flex-row items-center gap-3">
+            <Icon name="alert" tone="accent" />
+            <Text class="flex-1 text-[16px] font-semibold leading-6 text-foreground">
+              {approval()?.toolName ?? "Tool"}
+            </Text>
           </View>
-          <Text class="text-xs leading-4 text-warning-foreground">
+          <Text class="text-[14px] leading-5 text-muted-foreground">
             {clampText(approval()?.description ?? "", 700)}
           </Text>
           <If when={(approval()?.command?.length ?? 0) > 0}>
-            <Surface variant="code" class="px-2.5 py-2">
-              <Text class="font-mono text-xs leading-4 text-code-foreground">
-                {oneLine(approval()?.command?.join(" ") ?? "", 240)}
-              </Text>
-            </Surface>
+            <Text class="font-mono text-[14px] leading-5 text-foreground">
+              {oneLine(approval()?.command?.join(" ") ?? "", 240)}
+            </Text>
           </If>
-          <View class="flex-row justify-end gap-2">
+          <View class="flex-row justify-end gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -71,55 +64,52 @@ function ApprovalCard() {
   );
 }
 
-type StatusTone = "neutral" | "info" | "warning" | "danger";
+type StatusTone = "neutral" | "accent" | "danger";
 
 const statusTextClasses: Record<StatusTone, string> = {
-  neutral: "text-dim-foreground",
-  info: "text-info-foreground",
-  warning: "text-warning-foreground",
+  neutral: "text-muted-foreground",
+  accent: "text-foreground",
   danger: "text-danger-foreground",
 };
 
 const statusDotClasses: Record<StatusTone, string> = {
-  neutral: "bg-dim-foreground",
-  info: "bg-info",
-  warning: "bg-warning",
+  neutral: "bg-muted-foreground",
+  accent: "bg-primary",
   danger: "bg-danger",
 };
 
 function StatusLine() {
   const run = () => activeRun();
   const text = () => {
-    if (connectionState() !== "online") return "Reconnecting to Forge Core…";
-    if (socketState() !== "live") return "Event stream is reconnecting…";
+    if (connectionState() !== "online") return "Reconnecting…";
+    if (socketState() !== "live") return "Connecting events…";
     if (run().error) return run().error ?? "";
     if (lastError()) return lastError() ?? "";
     if (run().activity) return run().activity ?? "";
-    if (run().currentTool) return `Using ${run().currentTool}`;
-    if (activeSessionId()) return "Ready";
-    return "Create or select a session";
+    if (run().currentTool) return run().currentTool ?? "";
+    return "";
   };
   const tone = (): StatusTone => run().error || lastError()
     ? "danger"
     : connectionState() !== "online" || socketState() !== "live"
-      ? "warning"
+      ? "neutral"
       : run().activity || run().currentTool
-        ? "info"
+        ? "accent"
         : "neutral";
   return (
-    <View class="min-h-6 justify-center px-1">
-      <View class="flex-row items-center gap-2">
+    <If when={text().length > 0}>
+      <View class="min-h-6 flex-row items-center gap-2 px-2">
         <View
           class={`size-2 rounded-full ${statusDotClasses[tone()]} ${isWorkingStatus(run().status) ? "animate-pulse motion-reduce:animate-none" : ""}`}
         />
         <Text
-          class={`text-xs leading-4 ${statusTextClasses[tone()]}`}
+          class={`text-[14px] leading-5 ${statusTextClasses[tone()]}`}
           style={{ numberOfLines: 1, textOverflow: "ellipsis" }}
         >
           {text()}
         </Text>
       </View>
-    </View>
+    </If>
   );
 }
 
@@ -132,13 +122,13 @@ export function Composer() {
     && !isBusy("send")
     && connectionState() === "online";
   return (
-    <View class="border-t border-border-subtle bg-surface-soft px-4 pb-3 pt-2">
+    <View class="bg-background px-8 pb-6 pt-3">
       <ApprovalCard />
-      <View class="w-full max-w-[920px] gap-2 self-center">
+      <View class="mx-auto w-full max-w-[840px] gap-3">
         <StatusLine />
         <Surface
           variant="overlay"
-          class="gap-2 p-2"
+          class="gap-3 p-4"
           style={{ boxShadow: elevatedShadow() }}
         >
           <Input
@@ -151,49 +141,36 @@ export function Composer() {
             accessibilityLabel={hasSession() ? `Message ${activeSnapshot()?.title ?? "Forge"}` : "Message Forge"}
             placeholder={hasSession()
               ? `Message ${activeSnapshot()?.title ?? "Forge"}…`
-              : "Create a session before messaging Forge…"}
-            class="rounded-(--radius-sm) px-1.5 text-sm leading-5 text-foreground caret-primary placeholder:text-dim-foreground selection:bg-selection focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              : "Create a session…"}
+            class="rounded-(--radius) px-2 py-1 text-[16px] leading-6 text-foreground caret-primary placeholder:text-dim-foreground selection:bg-selection focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             classList={{
               "bg-transparent": hasSession(),
-              "bg-surface-inset": !hasSession(),
+              "bg-surface-soft": !hasSession(),
             }}
-            style={{ minHeight: 64, maxHeight: 144 }}
+            style={{ minHeight: 64, maxHeight: 160 }}
           />
-          <View class="flex-row flex-wrap items-center justify-between gap-2">
-            <Text class={textClasses.dim}>
-              Enter sends · Shift+Enter inserts a newline
-            </Text>
-            <View class="flex-row flex-wrap items-center justify-end gap-2">
-              <If when={running()}>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  label={isBusy("cancel") ? "Cancelling…" : "Cancel"}
-                  busy={isBusy("cancel")}
-                  onPress={() => void cancelActive()}
-                  disabled={isBusy("cancel")}
-                />
-              </If>
-              <If when={!hasSession()}>
-                <Button
-                  variant="soft"
-                  size="sm"
-                  label={isBusy("create") ? "Creating…" : "New session"}
-                  busy={isBusy("create")}
-                  onPress={() => void createSession()}
-                  disabled={isBusy("create") || connectionState() !== "online"}
-                />
-              </If>
+          <View class="flex-row items-center justify-end gap-3">
+            <If when={running()}>
               <Button
-                variant="primary"
+                variant="danger"
                 size="sm"
-                label={isBusy("send") ? "Sending…" : "Send"}
-                busy={isBusy("send")}
-                onPress={() => void sendPrompt()}
-                disabled={!canSend()}
-                accessibilityLabel="Send message to Forge"
+                icon="stop"
+                label={isBusy("cancel") ? "Cancelling…" : "Cancel"}
+                busy={isBusy("cancel")}
+                onPress={() => void cancelActive()}
+                disabled={isBusy("cancel")}
               />
-            </View>
+            </If>
+            <Button
+              variant="primary"
+              size="md"
+              icon="send"
+              label={isBusy("send") ? "Sending…" : "Send"}
+              busy={isBusy("send")}
+              onPress={() => void sendPrompt()}
+              disabled={!canSend()}
+              accessibilityLabel="Send message"
+            />
           </View>
         </Surface>
       </View>

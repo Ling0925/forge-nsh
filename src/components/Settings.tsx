@@ -1,95 +1,78 @@
-import { horizontalSizeClass, keymap, Scroll, signal, Text, View } from "nsh";
+import { horizontalSizeClass, keymap, Scroll, Text, View } from "nsh";
 import { prepareSettingsPage, requestCloseSettings, seedSettingsFormsFromCache } from "../settings";
 import {
   connectionState,
   coreSettings,
   settingsLoadError,
   settingsLoadState,
+  settingsSection,
+  type SettingsSection,
 } from "../store";
 import { textClasses } from "../theme";
 import { Badge, type BadgeTone } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Icon } from "../ui/icon";
 import { Surface } from "../ui/surface";
 import { GeneralSettings } from "./settings/GeneralSettings";
 import { ProviderSettings } from "./settings/ProviderSettings";
 
-type SettingsSection = "provider" | "general";
-
-const section = signal<SettingsSection>("provider");
-
 const sections: readonly {
   id: SettingsSection;
   title: string;
-  subtitle: string;
-  description: string;
 }[] = [
-  {
-    id: "provider",
-    title: "Model providers",
-    subtitle: "Sources & keys",
-    description: "Manage provider endpoints, write-only credentials, model catalogs and the active source.",
-  },
-  {
-    id: "general",
-    title: "General",
-    subtitle: "Runtime defaults",
-    description: "Theme, permission, reasoning, timeout and context preferences for new runs.",
-  },
+  { id: "provider", title: "Providers" },
+  { id: "general", title: "General" },
 ];
 
 function NavItem(props: { item: (typeof sections)[number] }) {
-  const active = () => section() === props.item.id;
+  const active = () => settingsSection() === props.item.id;
   return (
     <Button
       variant="nav"
       selected={active()}
-      onPress={() => section.set(props.item.id)}
+      onPress={() => settingsSection.set(props.item.id)}
       accessibilityLabel={`Open ${props.item.title} settings`}
     >
-      <View class="min-w-0 flex-1 gap-0.5">
-        <Text class={`text-sm leading-5 ${active() ? "font-bold text-foreground" : "font-medium text-secondary-foreground"}`}>
-          {props.item.title}
-        </Text>
-        <Text class={textClasses.dim}>{props.item.subtitle}</Text>
-      </View>
+      <Text class={`text-[14px] leading-5 ${active() ? "font-semibold text-foreground" : "font-normal text-muted-foreground"}`}>
+        {props.item.title}
+      </Text>
     </Button>
   );
 }
 
 function statusBadge(): { tone: BadgeTone; label: string } {
-  if (connectionState() !== "online") return { tone: "danger", label: "Core offline" };
-  if (settingsLoadState() === "loading" && !coreSettings()) return { tone: "warning", label: "Loading settings" };
-  if (settingsLoadState() === "error" && !coreSettings()) return { tone: "danger", label: "Settings unavailable" };
+  if (connectionState() !== "online") return { tone: "danger", label: "Offline" };
+  if (settingsLoadState() === "loading" && !coreSettings()) return { tone: "neutral", label: "Loading" };
+  if (settingsLoadState() === "error" && !coreSettings()) return { tone: "danger", label: "Unavailable" };
   return coreSettings()?.isConfigured
-    ? { tone: "success", label: "Provider configured" }
-    : { tone: "warning", label: "Provider not configured" };
+    ? { tone: "neutral", label: "Configured" }
+    : { tone: "neutral", label: "Unconfigured" };
 }
 
 function SettingsUnavailable() {
   const loading = () => settingsLoadState() === "loading";
   return (
-    <View class="flex-1 items-center justify-center p-8">
-      <Surface variant="panel" class="max-w-[460px] items-center gap-3 px-5 py-6">
-        <View class="size-11 items-center justify-center rounded-(--radius-lg) border border-warning-border bg-warning-soft">
-          <Text class="text-lg font-bold leading-6 text-warning-foreground">!</Text>
-        </View>
+    <View class="flex-1 items-center justify-center p-12">
+      <View class="max-w-[460px] items-center gap-6">
+        <Icon name="alert" tone="muted" />
         <Text class={textClasses.title} style={{ textAlign: "center" }}>
-          {loading() ? "Loading settings…" : connectionState() !== "online" ? "Forge Core is offline" : "Settings could not be loaded"}
+          {loading() ? "Loading…" : connectionState() !== "online" ? "Offline" : "Settings unavailable"}
         </Text>
-        <Text class={`${textClasses.small} text-center leading-5`}>
-          {loading()
-            ? "Reading the public settings projection from the embedded Core."
-            : settingsLoadError() ?? "Reconnect to Forge Core, then retry loading settings."}
-        </Text>
+        <If when={!loading() && settingsLoadError() !== undefined}>
+          <Text class={`${textClasses.secondary} text-center`} role="alert">
+            {settingsLoadError()}
+          </Text>
+        </If>
         <Button
-          variant="soft"
+          variant="primary"
           size="sm"
+          icon="refresh"
           label={loading() ? "Loading…" : "Retry"}
           busy={loading()}
           disabled={loading() || connectionState() !== "online"}
           onPress={() => void prepareSettingsPage()}
         />
-      </Surface>
+      </View>
     </View>
   );
 }
@@ -97,74 +80,62 @@ function SettingsUnavailable() {
 function SettingsRail() {
   return (
     <View
-      class="h-full border-r border-sidebar-border bg-sidebar pb-4 pt-4"
+      class="h-full bg-sidebar py-6"
       style={{ width: 264, flexShrink: 0 }}
       role="navigation"
       accessibilityLabel="Settings navigation"
     >
-      <View class="gap-4 px-4">
+      <View class="gap-6 px-6">
         <Button
           variant="ghost"
           size="sm"
-          label="← Back to workbench"
+          icon="arrow-left"
+          class="w-fit px-2"
+          label="Back"
           onPress={() => void requestCloseSettings()}
           accessibilityLabel="Back to workbench"
         />
         <View class="flex-row items-center gap-3">
-          <View class="size-10 items-center justify-center rounded-(--radius-lg) border border-primary-border bg-primary-soft">
-            <Text class="text-lg font-bold leading-6 text-primary">⚙</Text>
-          </View>
-          <View class="gap-0.5">
-            <Text class="text-lg font-bold leading-6 tracking-tight text-sidebar-foreground">Settings</Text>
-            <Text class={textClasses.dim}>Forge Core configuration</Text>
-          </View>
+          <Icon name="settings" />
+          <Text class={textClasses.title}>Settings</Text>
         </View>
       </View>
 
-      <View class="gap-1 px-2.5 pt-5">
+      <View class="gap-1 px-4 pt-8">
         <Each of={sections} key={(item) => item.id}>
           {(item) => <NavItem item={item()} />}
         </Each>
-      </View>
-
-      <View class="flex-1" />
-      <View class="mx-3 border-t border-sidebar-border px-1 pt-3">
-        <Text class={textClasses.dim}>
-          Shares configuration with the Forge CLI · secrets are write-only
-        </Text>
       </View>
     </View>
   );
 }
 
 function SettingsContentHeader() {
-  const current = () => sections.find((item) => item.id === section()) ?? sections[0];
+  const current = () => sections.find((item) => item.id === settingsSection()) ?? sections[0];
   const badge = () => statusBadge();
   return (
     <View
-      class="flex-row flex-wrap items-center gap-3 border-b border-border-subtle bg-surface-soft px-5 py-3"
-      style={{ minHeight: 68 }}
+      class="flex-row flex-wrap items-center justify-between gap-4 bg-background px-8 py-5"
+      style={{ minHeight: 72 }}
     >
-      <View class="min-w-0 flex-1 gap-1">
-        <View class="flex-row flex-wrap items-center gap-2">
-          <Text class="text-lg font-semibold leading-6 tracking-tight text-foreground">
-            {current().title}
-          </Text>
-          <Badge dot tone={badge().tone} label={badge().label} />
-        </View>
-        <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
-          {current().description}
-        </Text>
+      <View class="min-w-0 flex-row items-center gap-3">
+        <Text class={textClasses.title}>{current().title}</Text>
+        <Badge dot tone={badge().tone} label={badge().label} />
       </View>
       <Button
-        variant="outline"
-        size="sm"
-        label={settingsLoadState() === "loading" ? "Refreshing…" : "Refresh"}
+        variant="ghost"
+        size="icon"
         busy={settingsLoadState() === "loading"}
         disabled={settingsLoadState() === "loading" || connectionState() !== "online"}
         onPress={() => void prepareSettingsPage()}
         accessibilityLabel="Refresh settings"
-      />
+        tooltip="Refresh"
+      >
+        <Icon
+          name="refresh"
+          tone={settingsLoadState() === "loading" || connectionState() !== "online" ? "disabled" : "muted"}
+        />
+      </Button>
     </View>
   );
 }
@@ -172,45 +143,50 @@ function SettingsContentHeader() {
 function CompactSettingsHeader() {
   const badge = () => statusBadge();
   return (
-    <View class="gap-3 border-b border-border-subtle bg-surface-soft px-4 py-3">
-      <View class="flex-row items-center justify-between gap-2">
+    <View class="gap-4 bg-background px-6 py-4">
+      <View class="flex-row items-center justify-between gap-3">
         <Button
           variant="ghost"
           size="sm"
-          label="← Back"
+          icon="arrow-left"
+          label="Back"
           onPress={() => void requestCloseSettings()}
           accessibilityLabel="Back to workbench"
         />
-        <View class="min-w-0 flex-1 flex-row items-center justify-center gap-2">
-          <Text class="text-base font-bold leading-5 tracking-tight text-foreground">Settings</Text>
+        <View class="flex-row items-center gap-2">
+          <Text class={textClasses.title}>Settings</Text>
           <Badge dot tone={badge().tone} label={badge().label} />
         </View>
         <Button
-          variant="outline"
-          size="sm"
-          label={settingsLoadState() === "loading" ? "Refreshing…" : "Refresh"}
+          variant="ghost"
+          size="icon"
           busy={settingsLoadState() === "loading"}
           disabled={settingsLoadState() === "loading" || connectionState() !== "online"}
           onPress={() => void prepareSettingsPage()}
           accessibilityLabel="Refresh settings"
-        />
+        >
+          <Icon
+            name="refresh"
+            tone={settingsLoadState() === "loading" || connectionState() !== "online" ? "disabled" : "muted"}
+          />
+        </Button>
       </View>
       <View
-        class="flex-row gap-1 rounded-(--radius-lg) border border-border-subtle bg-surface-inset p-1"
+        class="flex-row gap-1 rounded-(--radius-lg) bg-surface-soft p-1"
         role="tablist"
         accessibilityLabel="Settings sections"
       >
         <Each of={sections} key={(item) => item.id}>
           {(item) => {
-            const active = () => section() === item().id;
+            const active = () => settingsSection() === item().id;
             return (
               <Button
-                variant={active() ? "soft" : "ghost"}
+                variant={active() ? "secondary" : "ghost"}
                 size="sm"
-                class="flex-1"
+                class={`flex-1 ${active() ? "bg-surface-raised font-semibold" : ""}`}
                 label={item().title}
                 selected={active()}
-                onPress={() => section.set(item().id)}
+                onPress={() => settingsSection.set(item().id)}
                 accessibilityLabel={`Open ${item().title} settings`}
               />
             );
@@ -222,8 +198,6 @@ function CompactSettingsHeader() {
 }
 
 export function SettingsScreen() {
-  // Components are constructed once in NSH. Seeding is cheap and prepare owns a
-  // fresh authoritative read for this presentation of the page.
   queueMicrotask(() => {
     seedSettingsFormsFromCache();
     void prepareSettingsPage();
@@ -242,20 +216,17 @@ export function SettingsScreen() {
         </If>
 
         <If when={coreSettings() !== undefined} else={<SettingsUnavailable />}>
-          <Scroll class="min-h-0 flex-1" contentClass="px-5 py-5">
-            <View class="mx-auto w-full max-w-[980px]">
+          <Scroll class="min-h-0 flex-1" contentClass="px-8 py-8">
+            <View class="mx-auto w-full max-w-[840px] gap-8">
               <If when={settingsLoadState() === "error" && settingsLoadError() !== undefined}>
-                <Surface variant="warning" class="mb-4 gap-1 px-4 py-3" role="alert">
-                  <Text class="text-xs font-bold leading-4 text-warning-foreground">Refresh failed</Text>
-                  <Text class="text-xs leading-4 text-muted-foreground">
-                    {settingsLoadError()}{" "}
-                    {connectionState() !== "online"
-                      ? "Cached settings are shown; saving is disabled while Core is offline."
-                      : "Cached settings are shown; retry refreshing before saving."}
+                <Surface variant="danger" class="flex-row items-center gap-3 p-4" role="alert">
+                  <Icon name="alert" tone="danger" />
+                  <Text class="flex-1 text-[14px] leading-5 text-danger-foreground">
+                    {settingsLoadError()}
                   </Text>
                 </Surface>
               </If>
-              <If when={section() === "provider"} else={<GeneralSettings />}>
+              <If when={settingsSection() === "provider"} else={<GeneralSettings />}>
                 <ProviderSettings />
               </If>
             </View>

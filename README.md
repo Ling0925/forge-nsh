@@ -66,6 +66,10 @@ node scripts/forge-nsh.mjs \
 - 如果没有配置 Provider/API key，连接、空状态和 Inspector 仍可验证；Core 会拒绝创建会话，并在 composer 状态行显示该错误；
 - 默认绑定服务启动时探测到的主 LAN IPv4，而不是 `0.0.0.0`；本机访问请使用输出的具体地址。
 
+## 设计规范
+
+界面目标规范、实施口径与迁移清单见 [`docs/DESIGN.md`](docs/DESIGN.md)。当前实现尚未完成迁移，冲突时以文档第 1–5 节为准。
+
 ## 开发
 
 ```sh

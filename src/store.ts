@@ -14,7 +14,16 @@ import {
   type SessionSnapshot,
   type SessionStatus,
   type SessionSummary,
+  type ThemePreference,
 } from "./protocol";
+import {
+  type AssistantTranscriptItem,
+  buildTranscriptItems,
+  type ReasoningTranscriptItem,
+  type TranscriptItem,
+} from "./transcript";
+
+export type { TranscriptItem };
 
 export type ConnectionState = "connecting" | "online" | "offline";
 export type SocketState = "connecting" | "live" | "offline";
@@ -27,6 +36,11 @@ export interface RunUiState {
   streamingReasoning: string;
   pendingApproval?: ApprovalRequest;
   currentTool?: string;
+  toolPreviewStats?: {
+    argsChars?: number;
+    linesAdded?: number;
+    linesRemoved?: number;
+  };
   activity?: string;
   error?: string;
   model?: string;
@@ -34,14 +48,6 @@ export interface RunUiState {
   usageLabel?: string;
   contextLabel?: string;
   lastEventAt?: string;
-}
-
-export interface TranscriptRow {
-  id: string;
-  kind: "user" | "assistant" | "tool" | "live" | "reasoning";
-  text: string;
-  detail?: string;
-  live?: boolean;
 }
 
 const EMPTY_RUN: RunUiState = {
@@ -85,6 +91,8 @@ export type SettingsLoadState = "idle" | "loading" | "ready" | "error";
 export const coreSettings = signal<PublicSettings | undefined>();
 export const availableModels = signal<readonly string[]>([]);
 export const settingsOpen = signal(false);
+export type SettingsSection = "provider" | "general";
+export const settingsSection = signal<SettingsSection>("provider");
 export const settingsLoadState = signal<SettingsLoadState>("idle");
 export const settingsLoadError = signal<string | undefined>();
 
@@ -296,11 +304,22 @@ export function saveSettings(input: ConfigureInput): Promise<PublicSettings> {
   return operation;
 }
 
-export function openSettings(): void {
+export function openSettings(section?: SettingsSection): void {
   batch(() => {
+    if (section) settingsSection.set(section);
     sidebarOpen.set(false);
     settingsOpen.set(true);
   });
+}
+
+export async function applyThemePreference(theme: ThemePreference): Promise<void> {
+  setColorScheme(theme);
+  if (!settingsWritable()) return;
+  try {
+    await saveSettings({ settings: { theme } });
+  } catch (error) {
+    lastError.set(errorText(error));
+  }
 }
 
 export function closeSettings(): void {
@@ -484,6 +503,7 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
       streamingReasoning: "",
       pendingApproval: undefined,
       currentTool: undefined,
+      toolPreviewStats: undefined,
       activity: "Run started",
       error: undefined,
       model: event.model,
@@ -505,6 +525,7 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
       streamingText: "",
       streamingReasoning: "",
       currentTool: undefined,
+      toolPreviewStats: undefined,
       lastEventAt: event.timestamp,
     });
     if (event.type === "generation_finished") queueRefresh(pending, sessionId);
@@ -534,6 +555,11 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
   if (event.type === "tool_call_preview") {
     updateRun(sessionId, {
       currentTool: event.name || "tool",
+      toolPreviewStats: {
+        ...(typeof event.argumentsChars === "number" ? { argsChars: event.argumentsChars } : {}),
+        ...(typeof event.linesAdded === "number" ? { linesAdded: event.linesAdded } : {}),
+        ...(typeof event.linesRemoved === "number" ? { linesRemoved: event.linesRemoved } : {}),
+      },
       activity: `Preparing ${event.name || "tool"}`,
       lastEventAt: event.timestamp,
     });
@@ -541,7 +567,12 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
   }
 
   if (event.type === "tool_preview_reset") {
-    updateRun(sessionId, { currentTool: undefined, activity: undefined, lastEventAt: event.timestamp });
+    updateRun(sessionId, {
+      currentTool: undefined,
+      toolPreviewStats: undefined,
+      activity: undefined,
+      lastEventAt: event.timestamp,
+    });
     return;
   }
 
@@ -550,6 +581,7 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
       streamingText: "",
       streamingReasoning: "",
       currentTool: event.call?.function.name ?? "tool",
+      toolPreviewStats: undefined,
       activity: event.call ? `Running ${event.call.function.name}` : "Running tool",
       lastEventAt: event.timestamp,
     });
@@ -639,6 +671,7 @@ function handleHostEvent(host: HostEvent, pending: PendingRefresh): void {
       streamingReasoning: "",
       pendingApproval: undefined,
       currentTool: undefined,
+      toolPreviewStats: undefined,
       activity: undefined,
       usageLabel: usageLabel(event),
       lastEventAt: event.timestamp,
@@ -725,74 +758,44 @@ export async function boot(): Promise<void> {
   }
 }
 
-export const historyRows = computed<readonly TranscriptRow[]>(() => {
+export const historyItems = computed<readonly TranscriptItem[]>(() => {
   const snapshot = activeSnapshot();
-  if (!snapshot) return [];
-  const rows: TranscriptRow[] = [];
-  for (const [index, message] of snapshot.messages.entries()) {
-    if (message.role === "system") continue;
-    if (message.role === "user") {
-      rows.push({
-        id: `${snapshot.id}:user-${index}`,
-        kind: "user",
-        text: message.content,
-        detail: message.images?.length ? `${message.images.length} image attachment(s)` : undefined,
-      });
-      continue;
-    }
-    if (message.role === "assistant") {
-      if (message.reasoning?.trim()) {
-        rows.push({
-          id: `${snapshot.id}:reasoning-${index}`,
-          kind: "reasoning",
-          text: clampText(message.reasoning, 1600),
-        });
-      }
-      if (message.content?.trim()) {
-        rows.push({ id: `${snapshot.id}:assistant-${index}`, kind: "assistant", text: message.content });
-      }
-      if (message.tool_calls?.length) {
-        rows.push({
-          id: `${snapshot.id}:calls-${index}`,
-          kind: "tool",
-          text: `Requested ${message.tool_calls.map((call) => call.function.name).join(", ")}`,
-          detail: "Tool call arguments are summarized by the PoC renderer.",
-        });
-      }
-      continue;
-    }
-    rows.push({
-      id: `${snapshot.id}:tool-${index}`,
-      kind: "tool",
-      text: clampText(message.content, 1400),
-      detail: `Tool result ${message.tool_call_id.slice(0, 8)}`,
-    });
-  }
-  return rows;
+  return snapshot ? buildTranscriptItems(snapshot) : [];
 });
 
-export const liveReasoningRow = computed<TranscriptRow | undefined>(() => {
-  const run = activeRun();
-  if (!run.streamingReasoning.trim()) return undefined;
+export const liveReasoningItem = computed<ReasoningTranscriptItem | undefined>(() => {
+  const trimmed = activeRun().streamingReasoning.trim();
+  if (!trimmed) return undefined;
   return {
     id: "live-reasoning",
     kind: "reasoning",
-    text: clampText(run.streamingReasoning, 1600),
+    text: clampText(trimmed, 8000),
+    charCount: trimmed.length,
     live: true,
   };
 });
 
-export const liveAssistantRow = computed<TranscriptRow | undefined>(() => {
+export const liveAssistantItem = computed<AssistantTranscriptItem | undefined>(() => {
   const run = activeRun();
   if (!run.streamingText.trim()) return undefined;
   return {
     id: "live-assistant",
-    kind: "live",
+    kind: "assistant",
     text: run.streamingText,
+    model: run.model ?? activeSnapshot()?.model,
     live: true,
   };
 });
 
-export const hasTranscriptRows = computed(() =>
-  historyRows().length > 0 || liveReasoningRow() !== undefined || liveAssistantRow() !== undefined
+export const showLiveWorking = computed(() => activeWorking() && liveAssistantItem() === undefined);
+
+export const hasTranscriptContent = computed(() =>
+  historyItems().length > 0 ||
+  liveReasoningItem() !== undefined ||
+  liveAssistantItem() !== undefined ||
+  showLiveWorking()
+);
+
+export const userTurnCount = computed(() =>
+  activeSnapshot()?.messages.filter((message) => message.role === "user").length ?? 0
 );

@@ -1,4 +1,4 @@
-import { Text, View } from "nsh";
+import { horizontalSizeClass, Text, View } from "nsh";
 import type { ProviderProtocol, PublicProviderSource } from "../../protocol";
 import {
   activateProviderSource,
@@ -12,6 +12,7 @@ import {
   providerPresets,
   providerProblems,
   providerSaving,
+  providerSources,
   providerStatus,
   providerValidation,
   refreshProviderCatalog,
@@ -26,14 +27,14 @@ import {
   sourceActionStatus,
   startNewProviderSource,
   updateProviderDraft,
-  providerSources,
 } from "../../settings";
 import { endpointProblem } from "../../settings/common";
 import { coreSettings, settingsWritable } from "../../store";
-import { textClasses } from "../../theme";
+import { intentRevealClass, textClasses } from "../../theme";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
 import { Checkbox } from "../../ui/checkbox";
+import { Icon } from "../../ui/icon";
 import { OptionSelect } from "../../ui/select";
 import { Surface } from "../../ui/surface";
 import { Field, SaveStatusLine, SettingsGroup, SettingsInput, ValidationList } from "./SettingsControls";
@@ -50,13 +51,7 @@ function protocolTitle(protocol: ProviderProtocol | undefined): string {
 }
 
 function compactEndpoint(value: string): string {
-  return value.replace(/^https?:\/\//, "") || "no endpoint";
-}
-
-function sourceKeyTone(source: PublicProviderSource): "success" | "warning" | "neutral" {
-  if (source.hasApiKey) return "success";
-  if (source.credentials?.some((credential) => credential.type === "account")) return "neutral";
-  return "warning";
+  return value.replace(/^https?:\/\//, "") || "—";
 }
 
 function sourceKeyLabel(source: PublicProviderSource): string {
@@ -73,23 +68,23 @@ function SourceCard(props: { source: PublicProviderSource }) {
   const id = props.source.id;
   const selected = () => selectedProviderSourceId() === id;
   const active = () => coreSettings()?.activeSourceId === id;
-  const catalog = () => providerCatalogs()[id];
   const catalogState = () => providerCatalogState()[id];
+  const isRegular = () => horizontalSizeClass() === "regular";
   return (
     <Surface
-      variant={selected() ? "soft" : "panel"}
-      class={`gap-2.5 p-3 ${active() ? "border-primary-border" : ""}`}
+      variant={selected() ? "bordered" : "soft"}
+      class={`group gap-3 p-6 ${active() && selected() ? "border-primary" : ""}`}
     >
       <Button
         variant="ghost"
-        class="w-full items-start justify-start px-0 py-0 text-left"
+        class="w-full items-start justify-start px-0 py-0 text-left enabled:hover:bg-transparent"
         onPress={() => void selectProviderSource(id)}
         accessibilityLabel={`Edit provider source ${props.source.label}`}
       >
-        <View class="min-w-0 flex-1 gap-1.5">
-          <View class="flex-row flex-wrap items-center gap-1.5">
+        <View class="min-w-0 flex-1 gap-2">
+          <View class="flex-row flex-wrap items-center gap-2">
             <Text
-              class="text-sm font-bold leading-5 text-foreground"
+              class="text-[16px] font-semibold leading-6 text-foreground"
               style={{ numberOfLines: 1, textOverflow: "ellipsis" }}
             >
               {props.source.label}
@@ -97,29 +92,23 @@ function SourceCard(props: { source: PublicProviderSource }) {
             <If when={active()}>
               <Badge tone="primary" label="Active" />
             </If>
-            <Badge
-              tone={sourceKeyTone(props.source)}
-              label={sourceKeyLabel(props.source)}
-            />
+            <Badge tone="neutral" label={sourceKeyLabel(props.source)} />
           </View>
-          <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
-            {compactEndpoint(props.source.baseUrl)}
-          </Text>
-          <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
-            {protocolTitle(props.source.apiMode)} · {props.source.model || "no model"}
-            {catalog() !== undefined ? ` · ${catalog()?.length ?? 0} catalog model(s)` : ""}
+          <Text class={textClasses.secondary} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
+            {compactEndpoint(props.source.baseUrl)} · {protocolTitle(props.source.apiMode)} · {props.source.model || "—"}
           </Text>
         </View>
       </Button>
-      <View class="flex-row flex-wrap items-center justify-end gap-2">
+      <View class={`flex-row flex-wrap items-center justify-end gap-2 ${isRegular() ? intentRevealClass : ""}`}>
         <If when={catalogState()?.error !== undefined}>
-          <Text class="flex-1 text-xs leading-4 text-danger-foreground" style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
+          <Text class="flex-1 text-[14px] leading-5 text-danger-foreground" style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
             {catalogState()?.error}
           </Text>
         </If>
         <Button
           variant="outline"
           size="sm"
+          icon="refresh"
           label={catalogState()?.loading ? "Refreshing…" : "Refresh models"}
           busy={catalogState()?.loading === true}
           disabled={!canWrite() || catalogState()?.loading === true}
@@ -127,7 +116,7 @@ function SourceCard(props: { source: PublicProviderSource }) {
         />
         <If when={!active()}>
           <Button
-            variant="soft"
+            variant="secondary"
             size="sm"
             label="Set active"
             disabled={!canWrite()}
@@ -141,19 +130,17 @@ function SourceCard(props: { source: PublicProviderSource }) {
 
 function SourceList() {
   return (
-    <View class="gap-2.5">
+    <View class="gap-4">
       <If
         when={providerSources().length > 0}
         else={(
-          <Surface variant="inset" class="items-center gap-2 px-4 py-6">
-            <Text class="text-sm font-semibold leading-5 text-muted-foreground">No provider sources yet</Text>
-            <Text class={`${textClasses.dim} text-center`}>
-              Add a source with an endpoint, API key and model to configure Forge.
-            </Text>
+          <Surface variant="soft" class="items-center gap-4 p-8">
+            <Text class={textClasses.body}>No provider sources</Text>
             <Button
-              variant="soft"
+              variant="primary"
               size="sm"
-              label="Add provider source"
+              icon="plus"
+              label="Add source"
               disabled={!canWrite()}
               onPress={startNewProviderSource}
             />
@@ -176,21 +163,13 @@ function CatalogPicker() {
   const items = () => models().map((model) => ({ value: model.id, title: model.id }));
   const selectedValue = () => items().some((item) => item.value === draft()?.model) ? draft()?.model ?? null : null;
   return (
-    <Surface variant="inset" class="gap-3 px-3 py-3">
-      <View class="flex-row flex-wrap items-center justify-between gap-2">
-        <View class="gap-0.5">
-          <Text class="text-xs font-bold uppercase leading-4 tracking-wider text-dim-foreground">Model catalog</Text>
-          <Text class={textClasses.dim}>
-            {draft()?.isNew
-              ? "Save the source before refreshing its catalog."
-              : state()?.loaded
-                ? `${models().length} model(s) available${state()?.stale ? " (cached; refresh failed)" : ""}`
-                : "Refresh to list models from this endpoint"}
-          </Text>
-        </View>
+    <View class="gap-3">
+      <View class="flex-row items-center justify-between gap-3">
+        <Text class="text-[14px] font-medium leading-5 text-foreground">Catalog</Text>
         <Button
           variant="outline"
           size="sm"
+          icon="refresh"
           label={state()?.loading ? "Refreshing…" : "Refresh"}
           busy={state()?.loading === true}
           disabled={!canWrite() || draft()?.isNew === true || state()?.loading === true}
@@ -198,14 +177,14 @@ function CatalogPicker() {
         />
       </View>
       <If when={state()?.error !== undefined}>
-        <Text class="text-xs leading-4 text-danger-foreground" role="alert">{state()?.error}</Text>
+        <Text class="text-[14px] leading-5 text-danger-foreground" role="alert">{state()?.error}</Text>
       </If>
       <If when={items().length > 0}>
         <OptionSelect
           accessibilityLabel="Choose a catalog model"
           items={items()}
           value={selectedValue()}
-          placeholder="Choose a catalog model…"
+          placeholder="Select a model…"
           searchable
           disabled={!canWrite()}
           onChange={(value) => {
@@ -213,16 +192,14 @@ function CatalogPicker() {
           }}
         />
       </If>
-      <If when={state()?.loaded === true && items().length === 0}>
-        <Text class={textClasses.dim}>The provider returned no models. Manual entry is still available.</Text>
-      </If>
-    </Surface>
+    </View>
   );
 }
 
 function ProviderEditor() {
   const draft = () => providerDraft();
   const disabled = () => !canWrite();
+  const isRegular = () => horizontalSizeClass() === "regular";
   const visibleProblems = () => providerValidation().length ? providerValidation() : (providerDirty() ? providerProblems() : []);
   const endpointError = () => {
     const value = draft()?.baseUrl ?? "";
@@ -231,7 +208,7 @@ function ProviderEditor() {
   const canSave = () => providerDirty() && providerProblems().length === 0 && canWrite();
   const chosenPreset = () => providerPresets().find((item) => item.id === (draft()?.preset ?? ""));
   const presetItems = () => [
-    { value: "", title: "Manual / custom endpoint" },
+    { value: "", title: "Custom endpoint" },
     ...providerPresets().map((item) => ({ value: item.id, title: item.name })),
   ];
   const regionItems = () => [
@@ -239,28 +216,13 @@ function ProviderEditor() {
     ...(chosenPreset()?.regions ?? []).map((item) => ({ value: item.id, title: item.name })),
   ];
   return (
-    <If
-      when={draft() !== undefined}
-      else={(
-        <Surface variant="panel" class="items-center gap-2 px-5 py-8">
-          <Text class={textClasses.title}>Select or add a provider source</Text>
-          <Text class={`${textClasses.small} text-center`}>
-            Source configuration is explicit and revision-checked, so concurrent CLI or desktop edits are not silently overwritten.
-          </Text>
-        </Surface>
-      )}
-    >
-      <Surface variant="panel" class="gap-5 p-5">
-        <View class="flex-row flex-wrap items-start justify-between gap-3">
-          <View class="min-w-0 flex-1 gap-1">
-            <Text class={textClasses.title}>{draft()?.isNew ? "Add provider source" : "Edit provider source"}</Text>
-            <Text class={textClasses.small}>
-              Keys are write-only and never echoed. Leave the key field blank to keep the saved credential.
-            </Text>
-          </View>
-          <View class="flex-row flex-wrap gap-1.5">
+    <If when={draft() !== undefined}>
+      <Surface variant="soft" class="group gap-6 p-8">
+        <View class="flex-row flex-wrap items-center justify-between gap-3">
+          <Text class={textClasses.title}>{draft()?.isNew ? "New source" : draft()?.label || "Source"}</Text>
+          <View class="flex-row flex-wrap gap-2">
             <If when={!draft()?.isNew}>
-              <Badge tone="neutral" label={`revision ${draft()?.revision ?? 0}`} />
+              <Badge tone="neutral" label={`rev ${draft()?.revision ?? 0}`} />
             </If>
             <If when={coreSettings()?.activeSourceId === draft()?.id}>
               <Badge tone="primary" label="Active" />
@@ -274,9 +236,7 @@ function ProviderEditor() {
           <View class="min-w-[220px] flex-1">
             <Field
               label="Preset"
-              description={providerPresetState().error
-                ? `Preset list unavailable: ${providerPresetState().error}`
-                : "Choosing a preset fills standard endpoints; every endpoint remains editable."}
+              error={providerPresetState().error}
             >
               <OptionSelect
                 accessibilityLabel="Provider preset"
@@ -284,7 +244,7 @@ function ProviderEditor() {
                 value={draft()?.preset ?? ""}
                 disabled={disabled()}
                 searchable
-                placeholder={providerPresetState().loading ? "Loading presets…" : "Choose a preset"}
+                placeholder={providerPresetState().loading ? "Loading…" : "Preset"}
                 onChange={(value) => selectProviderPreset(value ?? "")}
               />
             </Field>
@@ -306,11 +266,11 @@ function ProviderEditor() {
 
         <View class="flex-row flex-wrap gap-4">
           <View class="min-w-[220px] flex-1">
-            <Field label="Source name">
+            <Field label="Name">
               <SettingsInput
                 value={draft()?.label ?? ""}
                 readonly={disabled()}
-                placeholder="OpenAI, Anthropic, local proxy…"
+                placeholder="OpenAI, Anthropic…"
                 autoCorrect={false}
                 autoCapitalize="words"
                 accessibilityLabel="Provider source name"
@@ -319,7 +279,7 @@ function ProviderEditor() {
             </Field>
           </View>
           <View style={{ width: 240, maxWidth: "100%" }}>
-            <Field label="Protocol / API mode">
+            <Field label="Protocol">
               <OptionSelect
                 accessibilityLabel="Provider protocol"
                 items={protocolOptions}
@@ -333,7 +293,6 @@ function ProviderEditor() {
 
         <Field
           label="API base URL"
-          description="A complete HTTP(S) base URL without embedded credentials, query parameters or fragments."
           error={endpointError() || undefined}
         >
           <SettingsInput
@@ -350,10 +309,7 @@ function ProviderEditor() {
           />
         </Field>
 
-        <Field
-          label="Model ID"
-          description="Manual entry is always supported; after saving, refresh the catalog to choose from provider-reported models."
-        >
+        <Field label="Model">
           <SettingsInput
             value={draft()?.model ?? ""}
             readonly={disabled()}
@@ -368,12 +324,7 @@ function ProviderEditor() {
         <CatalogPicker />
 
         <View class="gap-3">
-          <Field
-            label="API key"
-            description={draft()?.canEditKey
-              ? `Write-only${draft()?.keyCredentialLabel ? ` · updates ${draft()?.keyCredentialLabel}` : ""}. Blank keeps the saved key.`
-              : draft()?.credentialNote ?? "This source's credentials are managed outside this compact editor."}
-          >
+          <Field label="API key">
             <SettingsInput
               value={draft()?.apiKey ?? ""}
               readonly={disabled() || !draft()?.canEditKey || draft()?.clearKey === true}
@@ -383,9 +334,9 @@ function ProviderEditor() {
               autoComplete="off"
               placeholder={draft()?.canEditKey
                 ? draft()?.originalHasApiKey
-                  ? "Saved key is hidden — enter to replace"
-                  : "Enter API key (optional)"
-                : "Managed credential — preserved"}
+                  ? "Leave blank to keep saved key"
+                  : "API key"
+                : "Managed credential"}
               accessibilityLabel="Provider API key"
               onChange={(event) => updateProviderDraft({ apiKey: event.value, clearKey: false })}
             />
@@ -395,40 +346,40 @@ function ProviderEditor() {
               checked={draft()?.clearKey === true}
               disabled={disabled()}
               label="Clear saved key"
-              description="Save with an empty credential instead of replacing it."
               onChange={(event) => updateProviderDraft({ clearKey: event.checked, apiKey: event.checked ? "" : draft()?.apiKey ?? "" })}
             />
           </If>
           <If when={draft()?.credentialNote !== undefined}>
-            <Surface variant="warning" class="px-3 py-2.5">
-              <Text class="text-xs leading-4 text-warning-foreground">{draft()?.credentialNote}</Text>
-            </Surface>
+            <Text class={textClasses.secondary}>{draft()?.credentialNote}</Text>
           </If>
         </View>
 
-        <View class="flex-row flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4">
-          <SaveStatusLine status={providerStatus()} idleText={providerDirty() ? "Unsaved provider changes" : "No unsaved provider changes"} />
-          <View class="flex-row flex-wrap justify-end gap-2">
-            <If when={!draft()?.isNew}>
+        <View class="flex-row flex-wrap items-center justify-between gap-4 pt-2">
+          <SaveStatusLine status={providerStatus()} idleText={providerDirty() ? "Unsaved changes" : ""} />
+          <View class="flex-row flex-wrap items-center justify-end gap-3">
+            <View class={`flex-row gap-3 ${isRegular() ? intentRevealClass : ""}`}>
+              <If when={!draft()?.isNew}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon="trash"
+                  label="Delete"
+                  disabled={!canWrite()}
+                  onPress={() => void removeProviderSource(draft()?.id ?? "")}
+                />
+              </If>
               <Button
-                variant="danger"
+                variant="outline"
                 size="sm"
-                label="Delete"
-                disabled={!canWrite()}
-                onPress={() => void removeProviderSource(draft()?.id ?? "")}
+                label="Reset"
+                disabled={!providerDirty() || disabled()}
+                onPress={resetProviderDraft}
               />
-            </If>
-            <Button
-              variant="outline"
-              size="sm"
-              label="Reset"
-              disabled={!providerDirty() || disabled()}
-              onPress={resetProviderDraft}
-            />
+            </View>
             <Button
               variant="primary"
-              size="sm"
-              label={providerStatus().state === "saving" ? "Saving…" : "Save provider source"}
+              size="md"
+              label={providerStatus().state === "saving" ? "Saving…" : "Save"}
               busy={providerStatus().state === "saving"}
               disabled={!canSave()}
               onPress={() => void saveProviderSource()}
@@ -441,40 +392,30 @@ function ProviderEditor() {
 }
 
 export function ProviderSettings() {
-  const active = () => providerSources().find((source) => source.id === coreSettings()?.activeSourceId);
   return (
-    <View class="gap-5">
+    <View class="gap-12">
       <If when={coreSettings()?.environmentOverride === true}>
-        <Surface variant="warning" class="gap-1 px-4 py-3" role="alert">
-          <Text class="text-xs font-bold leading-4 text-warning-foreground">Environment override active</Text>
-          <Text class="text-xs leading-4 text-muted-foreground">
-            FORGE_BASE_URL, FORGE_MODEL or FORGE_API_KEY is set. Saved provider changes may not affect runtime requests until the override is removed.
-          </Text>
-        </Surface>
-      </If>
-
-      <If when={coreSettings()?.providerSources === undefined}>
-        <Surface variant="warning" class="gap-1 px-4 py-3">
-          <Text class="text-xs font-bold leading-4 text-warning-foreground">Legacy settings contract</Text>
-          <Text class="text-xs leading-4 text-muted-foreground">
-            This Core did not report provider sources. The compact source editor is available with the modern Forge Core contract bundled with Forge NSH.
+        <Surface variant="soft" class="flex-row items-center gap-3 p-4" role="alert">
+          <Icon name="alert" tone="accent" />
+          <Text class="flex-1 text-[14px] leading-5 text-foreground">
+            FORGE_* environment override is active.
           </Text>
         </Surface>
       </If>
 
       <SettingsGroup
         title="Provider sources"
-        description={active()
-          ? `Active: ${active()?.label ?? ""} · ${active()?.model || "no model"} · ${compactEndpoint(active()?.baseUrl ?? "")}`
-          : "Endpoints, credentials and models are grouped into explicit sources."}
         actions={(
-          <Button
-            variant="secondary"
-            size="sm"
-            label="+ Add source"
-            disabled={!canWrite()}
-            onPress={startNewProviderSource}
-          />
+          <If when={providerSources().length > 0}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="plus"
+              label="Add source"
+              disabled={!canWrite()}
+              onPress={startNewProviderSource}
+            />
+          </If>
         )}
       >
         <SourceList />

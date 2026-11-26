@@ -1,4 +1,4 @@
-import { Text, View } from "nsh";
+import { horizontalSizeClass, Text, View } from "nsh";
 import type { PermissionPreference, ReasoningEffort, ThemePreference } from "../../protocol";
 import {
   generalDirty,
@@ -12,8 +12,9 @@ import {
   updateGeneralDraft,
 } from "../../settings";
 import { settingsWritable } from "../../store";
-import { textClasses } from "../../theme";
+import { intentRevealClass, textClasses } from "../../theme";
 import { Button } from "../../ui/button";
+import { Icon } from "../../ui/icon";
 import { OptionSelect } from "../../ui/select";
 import { Surface } from "../../ui/surface";
 import { Field, SaveStatusLine, SettingsGroup, SettingsInput, ValidationList } from "./SettingsControls";
@@ -47,27 +48,10 @@ const timeoutPresets = [
 const permissionOptions: readonly {
   value: PermissionPreference;
   title: string;
-  subtitle: string;
-  detail: string;
 }[] = [
-  {
-    value: "readonly",
-    title: "Read only",
-    subtitle: "Inspect and plan",
-    detail: "File reads are allowed. Writes and commands are blocked.",
-  },
-  {
-    value: "workspace",
-    title: "Workspace",
-    subtitle: "Recommended",
-    detail: "Workspace writes are allowed. Commands ask for approval.",
-  },
-  {
-    value: "unrestricted",
-    title: "Unrestricted",
-    subtitle: "High privilege",
-    detail: "Commands run directly as this user without per-command approval.",
-  },
+  { value: "readonly", title: "Read only" },
+  { value: "workspace", title: "Workspace" },
+  { value: "unrestricted", title: "Unrestricted" },
 ];
 
 function SegmentedChoice(props: {
@@ -79,7 +63,7 @@ function SegmentedChoice(props: {
 }) {
   return (
     <View
-      class="w-fit flex-row flex-wrap gap-1 rounded-(--radius-lg) border border-border-subtle bg-surface-inset p-1"
+      class="w-fit flex-row flex-wrap gap-1 rounded-(--radius-lg) bg-surface-soft p-1"
       role="group"
       accessibilityLabel={props.accessibilityLabel}
     >
@@ -87,9 +71,9 @@ function SegmentedChoice(props: {
         const active = () => props.value === option.value;
         return (
           <Button
-            variant={active() ? "soft" : "ghost"}
+            variant={active() ? "secondary" : "ghost"}
             size="sm"
-            class="min-w-[64px]"
+            class={`min-w-[64px] ${active() ? "bg-surface-raised font-semibold" : ""}`}
             label={option.title}
             selected={active()}
             disabled={props.disabled}
@@ -104,7 +88,7 @@ function SegmentedChoice(props: {
 
 function PermissionCards(props: { disabled?: boolean }) {
   return (
-    <View class="flex-row flex-wrap gap-2" role="radiogroup" accessibilityLabel="Default permission">
+    <View class="flex-row flex-wrap gap-3" role="radiogroup" accessibilityLabel="Default permission">
       {permissionOptions.map((option) => {
         const active = () => generalDraft().defaultPermission === option.value;
         return (
@@ -114,23 +98,17 @@ function PermissionCards(props: { disabled?: boolean }) {
             selected={active()}
             disabled={props.disabled}
             onPress={() => updateGeneralDraft({ defaultPermission: option.value })}
-            class={`min-w-[176px] flex-1 items-start justify-start px-3 py-3 text-left ${active() ? "border-primary-border bg-primary-soft" : ""}`}
+            class={`min-w-[160px] flex-1 items-center justify-between px-4 py-3 ${
+              active() ? "border-primary bg-primary-soft" : "border-border bg-surface-soft"
+            }`}
             accessibilityLabel={`${option.title} permission`}
           >
-            <View class="min-w-0 flex-1 gap-1.5">
-              <View class="flex-row items-center justify-between gap-2">
-                <Text class={`text-sm font-bold leading-5 ${active() ? "text-accent-foreground" : "text-foreground"}`}>
-                  {option.title}
-                </Text>
-                <If when={active()}>
-                  <Text class="text-xs font-bold leading-4 text-accent-foreground">✓</Text>
-                </If>
-              </View>
-              <Text class={active() ? "text-xs font-semibold leading-4 text-accent-foreground" : textClasses.dim}>
-                {option.subtitle}
-              </Text>
-              <Text class="text-xs leading-4 text-muted-foreground">{option.detail}</Text>
-            </View>
+            <Text class={`text-[14px] leading-5 ${active() ? "font-semibold text-foreground" : "font-medium text-foreground"}`}>
+              {option.title}
+            </Text>
+            <If when={active()}>
+              <Icon name="check" tone="accent" />
+            </If>
           </Button>
         );
       })}
@@ -140,18 +118,13 @@ function PermissionCards(props: { disabled?: boolean }) {
 
 export function GeneralSettings() {
   const disabled = () => !generalLoaded() || !settingsWritable() || generalStatus().state === "saving";
+  const isRegular = () => horizontalSizeClass() === "regular";
   return (
-    <View class="gap-5">
+    <View class="gap-12">
       <ValidationList errors={generalValidation()} />
 
-      <SettingsGroup
-        title="Appearance"
-        description="Stored with Forge Core and shared with other Forge clients. This NSH shell applies it after saving."
-      >
-        <Field
-          label="Theme"
-          description="System follows the host appearance; light and dark use this app's token pair."
-        >
+      <SettingsGroup title="Appearance">
+        <Field label="Theme">
           <SegmentedChoice
             accessibilityLabel="Theme"
             value={generalDraft().theme}
@@ -162,145 +135,128 @@ export function GeneralSettings() {
         </Field>
       </SettingsGroup>
 
-      <SettingsGroup
-        title="Default permission"
-        description="Applies to new runs only; it never raises the permission of a run already in progress."
-      >
+      <SettingsGroup title="Default permission">
         <PermissionCards disabled={disabled()} />
         <If when={generalDraft().defaultPermission === "unrestricted"}>
-          <Surface variant="warning" class="gap-1 px-3 py-2.5">
-            <Text class="text-xs font-bold leading-4 text-warning-foreground">High privilege</Text>
-            <Text class="text-xs leading-4 text-muted-foreground">
-              New runs can write files and execute terminal commands directly as this user, without per-command approval.
+          <Surface variant="danger" class="flex-row items-center gap-3 p-4">
+            <Icon name="alert" tone="danger" />
+            <Text class="flex-1 text-[14px] leading-5 text-danger-foreground">
+              Commands execute without per-command approval.
             </Text>
           </Surface>
         </If>
       </SettingsGroup>
 
-      <SettingsGroup
-        title="Generation"
-        description="Provider-independent inference preferences. Per-model behavior can still override them inside Forge Core."
-      >
-        <View class="gap-4">
-          <Field
-            label="Reasoning effort"
-            description="Used for models that accept a reasoning effort parameter. “Model default” sends no explicit preference."
-          >
-            <View style={{ width: 280, maxWidth: "100%" }}>
-              <OptionSelect
-                accessibilityLabel="Reasoning effort"
-                items={reasoningOptions}
-                value={generalDraft().reasoningEffort}
-                disabled={disabled()}
-                onChange={(value) => updateGeneralDraft({ reasoningEffort: (value ?? "default") as ReasoningEffort })}
-              />
-            </View>
-          </Field>
+      <SettingsGroup title="Generation">
+        <Field label="Reasoning effort">
+          <View style={{ width: 280, maxWidth: "100%" }}>
+            <OptionSelect
+              accessibilityLabel="Reasoning effort"
+              items={reasoningOptions}
+              value={generalDraft().reasoningEffort}
+              disabled={disabled()}
+              onChange={(value) => updateGeneralDraft({ reasoningEffort: (value ?? "default") as ReasoningEffort })}
+            />
+          </View>
+        </Field>
 
-          <Field
-            label="Idle request timeout"
-            description="How long a model stream may stay silent before the request fails. It does not cap total task duration."
-            error={generalFieldErrors().requestTimeoutMs}
-          >
-            <View class="gap-2">
-              <SegmentedChoice
-                accessibilityLabel="Request timeout presets"
-                value={generalDraft().requestTimeoutMs}
-                options={timeoutPresets}
-                disabled={disabled()}
-                onChange={(value) => updateGeneralDraft({ requestTimeoutMs: value })}
-              />
-              <View class="flex-row items-center gap-2">
-                <View style={{ width: 180 }}>
-                  <SettingsInput
-                    value={generalDraft().requestTimeoutMs}
-                    readonly={disabled()}
-                    invalid={generalFieldErrors().requestTimeoutMs !== undefined}
-                    keyboardType="numeric"
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    accessibilityLabel="Request timeout in milliseconds"
-                    onChange={(event) => updateGeneralDraft({ requestTimeoutMs: event.value })}
-                  />
-                </View>
-                <Text class={textClasses.dim}>ms · 1,000–600,000</Text>
-              </View>
-            </View>
-          </Field>
-        </View>
-      </SettingsGroup>
-
-      <SettingsGroup
-        title="Context"
-        description="When the conversation approaches the token budget, Forge compacts earlier context without deleting the transcript."
-      >
-        <View class="gap-4">
-          <Field
-            label="Token compression budget"
-            description="Leave blank for automatic (about 80% of the model context window). Manual values are capped by the model window."
-            error={generalFieldErrors().contextBudgetTokens}
-          >
-            <View class="flex-row items-center gap-2">
-              <View style={{ width: 220 }}>
+        <Field
+          label="Idle request timeout"
+          error={generalFieldErrors().requestTimeoutMs}
+        >
+          <View class="gap-3">
+            <SegmentedChoice
+              accessibilityLabel="Request timeout presets"
+              value={generalDraft().requestTimeoutMs}
+              options={timeoutPresets}
+              disabled={disabled()}
+              onChange={(value) => updateGeneralDraft({ requestTimeoutMs: value })}
+            />
+            <View class="flex-row items-center gap-3">
+              <View style={{ width: 180 }}>
                 <SettingsInput
-                  value={generalDraft().contextBudgetTokens}
+                  value={generalDraft().requestTimeoutMs}
                   readonly={disabled()}
-                  invalid={generalFieldErrors().contextBudgetTokens !== undefined}
+                  invalid={generalFieldErrors().requestTimeoutMs !== undefined}
                   keyboardType="numeric"
                   autoCorrect={false}
                   autoCapitalize="none"
-                  placeholder="Automatic"
-                  accessibilityLabel="Token compression budget"
-                  onChange={(event) => updateGeneralDraft({ contextBudgetTokens: event.value })}
+                  accessibilityLabel="Request timeout in milliseconds"
+                  onChange={(event) => updateGeneralDraft({ requestTimeoutMs: event.value })}
                 />
               </View>
-              <Text class={textClasses.dim}>tokens · optional</Text>
+              <Text class={textClasses.secondary}>ms</Text>
             </View>
-          </Field>
-          <Field
-            label="Legacy character fallback"
-            description="Used only when no token window is known. Normally this does not need to change."
-            error={generalFieldErrors().contextBudgetChars}
-          >
-            <View class="flex-row items-center gap-2">
-              <View style={{ width: 220 }}>
-                <SettingsInput
-                  value={generalDraft().contextBudgetChars}
-                  readonly={disabled()}
-                  invalid={generalFieldErrors().contextBudgetChars !== undefined}
-                  keyboardType="numeric"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  accessibilityLabel="Legacy character budget"
-                  onChange={(event) => updateGeneralDraft({ contextBudgetChars: event.value })}
-                />
-              </View>
-              <Text class={textClasses.dim}>chars · 4,096–2,000,000</Text>
-            </View>
-          </Field>
-        </View>
+          </View>
+        </Field>
       </SettingsGroup>
 
-      <Surface variant="soft" class="flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <SaveStatusLine status={generalStatus()} idleText={generalDirty() ? "Unsaved changes" : "No unsaved changes"} />
-        <View class="flex-row flex-wrap justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            label="Reset"
-            disabled={!generalDirty() || disabled()}
-            onPress={resetGeneralDraft}
-          />
+      <SettingsGroup title="Context">
+        <Field
+          label="Token compression budget"
+          error={generalFieldErrors().contextBudgetTokens}
+        >
+          <View class="flex-row items-center gap-3">
+            <View style={{ width: 220 }}>
+              <SettingsInput
+                value={generalDraft().contextBudgetTokens}
+                readonly={disabled()}
+                invalid={generalFieldErrors().contextBudgetTokens !== undefined}
+                keyboardType="numeric"
+                autoCorrect={false}
+                autoCapitalize="none"
+                placeholder="Automatic"
+                accessibilityLabel="Token compression budget"
+                onChange={(event) => updateGeneralDraft({ contextBudgetTokens: event.value })}
+              />
+            </View>
+            <Text class={textClasses.secondary}>tokens</Text>
+          </View>
+        </Field>
+        <Field
+          label="Character fallback"
+          error={generalFieldErrors().contextBudgetChars}
+        >
+          <View class="flex-row items-center gap-3">
+            <View style={{ width: 220 }}>
+              <SettingsInput
+                value={generalDraft().contextBudgetChars}
+                readonly={disabled()}
+                invalid={generalFieldErrors().contextBudgetChars !== undefined}
+                keyboardType="numeric"
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel="Legacy character budget"
+                onChange={(event) => updateGeneralDraft({ contextBudgetChars: event.value })}
+              />
+            </View>
+            <Text class={textClasses.secondary}>chars</Text>
+          </View>
+        </Field>
+      </SettingsGroup>
+
+      <View class="group flex-row flex-wrap items-center justify-between gap-4 pt-4">
+        <SaveStatusLine status={generalStatus()} idleText={generalDirty() ? "Unsaved changes" : ""} />
+        <View class="flex-row flex-wrap items-center justify-end gap-3">
+          <View class={isRegular() && !generalDirty() ? intentRevealClass : ""}>
+            <Button
+              variant="outline"
+              size="sm"
+              label="Reset"
+              disabled={!generalDirty() || disabled()}
+              onPress={resetGeneralDraft}
+            />
+          </View>
           <Button
             variant="primary"
-            size="sm"
-            label={generalStatus().state === "saving" ? "Saving…" : "Save general settings"}
+            size="md"
+            label={generalStatus().state === "saving" ? "Saving…" : "Save"}
             busy={generalStatus().state === "saving"}
             disabled={!generalDirty() || disabled()}
             onPress={() => void saveGeneralSettings()}
           />
         </View>
-      </Surface>
+      </View>
     </View>
   );
 }

@@ -1,3 +1,4 @@
+import "./src/fonts";
 import { horizontalSizeClass, mount, View } from "nsh";
 import { Button as BaseButton } from "nsh/base";
 import { CenterHeader } from "./src/components/CenterHeader";
@@ -27,7 +28,7 @@ function Workbench() {
         <View class="absolute inset-0 z-20 flex-row">
           <Sidebar compact />
           <BaseButton
-            class="flex-1 bg-black/50"
+            class="flex-1 bg-black/40"
             accessibilityLabel="Close sessions sidebar"
             onPress={() => sidebarOpen.set(false)}
           />
