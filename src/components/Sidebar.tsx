@@ -1,5 +1,4 @@
 import { Scroll, Text, View } from "nsh";
-import { Button } from "nsh/base";
 import { compactPath, formatTime, oneLine, statusLabel } from "../format";
 import {
   activeSessionId,
@@ -13,76 +12,48 @@ import {
   workspace,
 } from "../store";
 import type { SessionSummary } from "../protocol";
-import { buttonBase, colors, textStyles } from "../theme";
+import { textClasses } from "../theme";
+import { Badge, type BadgeTone } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Surface } from "../ui/surface";
 
-function StatusDot(props: { tone: "live" | "connecting" | "offline" }) {
-  const color = props.tone === "live"
-    ? colors.success
-    : props.tone === "connecting"
-      ? colors.warning
-      : colors.danger;
-  return (
-    <View
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: color,
-        marginTop: 4,
-      }}
-    />
-  );
+function sessionTone(status: SessionSummary["status"]): BadgeTone {
+  if (status === "running") return "info";
+  if (status === "awaiting_approval") return "warning";
+  if (status === "failed" || status === "cancelled" || status === "interrupted") return "danger";
+  if (status === "completed") return "success";
+  return "neutral";
 }
+
+const sessionDotClasses: Record<BadgeTone, string> = {
+  neutral: "bg-dim-foreground",
+  primary: "bg-primary",
+  info: "bg-info",
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+};
 
 function SessionRow(props: { session: SessionSummary }) {
   const selected = () => activeSessionId() === props.session.id;
-  const statusColor = () => props.session.status === "running" || props.session.status === "awaiting_approval"
-    ? colors.accentBright
-    : props.session.status === "failed"
-      ? colors.danger
-      : colors.textDim;
+  const tone = () => sessionTone(props.session.status);
   return (
     <Button
+      variant="nav"
+      selected={selected()}
       onPress={() => void selectSession(props.session.id)}
       accessibilityLabel={`Open session ${props.session.title}`}
-      style={{
-        width: "100%",
-        alignItems: "stretch",
-        borderRadius: 11,
-        paddingHorizontal: 10,
-        paddingVertical: 9,
-        backgroundColor: selected() ? colors.accentSoft : "transparent",
-        borderWidth: 1,
-        borderColor: selected() ? "#453781" : "transparent",
-      }}
-      hoverStyle={{
-        backgroundColor: selected() ? colors.accentSoft : colors.panelSoft,
-      }}
     >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
-        <View
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: 4,
-            marginTop: 6,
-            backgroundColor: statusColor(),
-          }}
-        />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+      <View class="min-w-0 flex-1 flex-row items-start gap-2">
+        <View class={`mt-1.5 size-2 rounded-full ${sessionDotClasses[tone()]}`} />
+        <View class="min-w-0 flex-1 gap-1">
           <Text
-            style={{
-              color: selected() ? colors.text : "#d7dce6",
-              fontSize: 13,
-              fontWeight: selected() ? "650" : "500",
-              lineHeight: 17,
-              numberOfLines: 1,
-              textOverflow: "ellipsis",
-            }}
+            class={`text-sm leading-5 ${selected() ? "font-semibold text-foreground" : "font-medium text-secondary-foreground"}`}
+            style={{ numberOfLines: 1, textOverflow: "ellipsis" }}
           >
             {props.session.title || "Untitled session"}
           </Text>
-          <Text style={{ ...textStyles.dim, numberOfLines: 1, textOverflow: "ellipsis" }}>
+          <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
             {statusLabel(props.session.status)} · {formatTime(props.session.updatedAt)}
           </Text>
         </View>
@@ -91,98 +62,73 @@ function SessionRow(props: { session: SessionSummary }) {
   );
 }
 
+function connectionBadgeTone(): BadgeTone {
+  if (connectionState() !== "online") return "danger";
+  return socketState() === "live" ? "success" : "warning";
+}
+
+function connectionBadgeLabel(): string {
+  if (connectionState() !== "online") return "Core disconnected";
+  return socketState() === "live" ? "Core connected" : "Events connecting";
+}
+
 export function Sidebar() {
-  const socketTone = () => connectionState() !== "online"
-    ? "offline" as const
-    : socketState() === "live"
-      ? "live" as const
-      : "connecting" as const;
   return (
     <View
-      style={{
-        width: 282,
-        height: "100%",
-        backgroundColor: colors.sidebar,
-        borderRightWidth: 1,
-        borderRightColor: colors.borderSoft,
-        paddingTop: 18,
-        paddingBottom: 14,
-      }}
+      class="h-full border-r border-sidebar-border bg-sidebar pb-3 pt-4"
+      style={{ width: 280 }}
+      role="navigation"
+      accessibilityLabel="Forge sessions and workspace"
     >
-      <View style={{ paddingHorizontal: 16, gap: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 11 }}>
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              backgroundColor: colors.accent,
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 8px 24px rgba(124, 92, 255, 0.32)",
-            }}
-          >
-            <Text style={{ color: "#ffffff", fontSize: 16, fontWeight: "800" }}>F</Text>
+      <View class="gap-4 px-4">
+        <View class="flex-row items-center gap-3">
+          <View class="size-9 items-center justify-center rounded-(--radius-lg) border border-primary-border bg-primary-soft">
+            <Text class="text-base font-bold leading-5 text-primary">F</Text>
           </View>
-          <View style={{ gap: 1 }}>
-            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "750", letterSpacing: -0.2 }}>
+          <View class="gap-0.5">
+            <Text class="text-base font-bold leading-5 tracking-tight text-sidebar-foreground">
               Forge NSH
             </Text>
-            <Text style={textStyles.dim}>native shell workbench</Text>
+            <Text class={textClasses.dim}>native shell workbench</Text>
           </View>
         </View>
 
-        <View
-          style={{
-            borderRadius: 12,
-            backgroundColor: "#0f131c",
-            borderWidth: 1,
-            borderColor: colors.borderSoft,
-            paddingHorizontal: 11,
-            paddingVertical: 10,
-            gap: 4,
-          }}
-        >
-          <Text style={textStyles.eyebrow}>Workspace</Text>
-          <Text style={{ ...textStyles.small, numberOfLines: 1, textOverflow: "ellipsis" }}>
+        <Surface variant="soft" class="gap-1 px-3 py-2.5">
+          <Text class={textClasses.eyebrow}>Workspace</Text>
+          <Text class={textClasses.small} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
             {compactPath(workspace() || "connecting…")}
           </Text>
-        </View>
+        </Surface>
 
         <Button
+          variant="soft"
+          size="md"
+          class="w-full"
+          label={busyAction() === "create" ? "Creating…" : "+ New session"}
+          busy={busyAction() === "create"}
           onPress={() => void createSession()}
           disabled={busyAction() === "create" || connectionState() !== "online"}
           accessibilityLabel="Create a new Forge session"
-          style={{
-            ...buttonBase,
-            backgroundColor: colors.accent,
-            opacity: busyAction() === "create" || connectionState() !== "online" ? 0.55 : 1,
-          }}
-          hoverStyle={{ backgroundColor: "#8d72ff" }}
-        >
-          <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>
-            {busyAction() === "create" ? "Creating…" : "+ New session"}
-          </Text>
-        </Button>
+        />
       </View>
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={textStyles.eyebrow}>Sessions</Text>
-          <Text style={textStyles.dim}>{sessionCount()}</Text>
+      <View class="px-4 pb-2 pt-4">
+        <View class="flex-row items-center justify-between">
+          <Text class={textClasses.eyebrow}>Sessions</Text>
+          <Text class={textClasses.dim}>{sessionCount()}</Text>
         </View>
       </View>
 
-      <Scroll style={{ flex: 1 }} contentClass="gap-1">
-        <View style={{ paddingHorizontal: 10, gap: 3 }}>
+      <Scroll class="min-h-0 flex-1" contentClass="gap-1">
+        <View class="gap-1 px-2.5">
           <If
             when={sortedSessions().length > 0}
             else={(
-              <View style={{ paddingHorizontal: 8, paddingVertical: 18, gap: 6 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: "600" }}>
+              <View class="gap-1.5 px-2 py-4">
+                <Text class="text-sm font-semibold leading-5 text-muted-foreground">
                   No sessions yet
                 </Text>
-                <Text style={textStyles.dim}>Create one to start a Forge run in this workspace.</Text>
+                <Text class={textClasses.dim}>Create one to start a Forge run in this workspace.</Text>
               </View>
             )}
           >
@@ -193,27 +139,11 @@ export function Sidebar() {
         </View>
       </Scroll>
 
-      <View
-        style={{
-          marginHorizontal: 14,
-          marginTop: 10,
-          paddingTop: 12,
-          borderTopWidth: 1,
-          borderTopColor: colors.borderSoft,
-          gap: 6,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-          <StatusDot tone={socketTone()} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>
-              {connectionState() === "online"
-                ? socketState() === "live" ? "Core connected" : "Core reachable; events connecting"
-                : "Core disconnected"}
-            </Text>
-            <Text style={textStyles.dim}>{oneLine(workspace() || "waiting for /api/connect", 42)}</Text>
-          </View>
-        </View>
+      <View class="mx-3 mt-2 gap-2 border-t border-sidebar-border px-1 pt-3">
+        <Badge dot tone={connectionBadgeTone()} label={connectionBadgeLabel()} />
+        <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
+          {oneLine(workspace() || "waiting for /api/connect", 42)}
+        </Text>
       </View>
     </View>
   );
