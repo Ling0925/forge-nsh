@@ -1,5 +1,4 @@
 import { Text, View } from "nsh";
-import { Button } from "nsh/base";
 import { formatTime, statusLabel } from "../format";
 import {
   activeRun,
@@ -9,13 +8,16 @@ import {
   refreshSession,
   refreshSessions,
 } from "../store";
-import { colors, textStyles } from "../theme";
+import { textClasses } from "../theme";
+import { Badge, type BadgeTone } from "../ui/badge";
+import { Button } from "../ui/button";
 
-function statusTone(status: string | undefined): string {
-  if (status === "running" || status === "awaiting_approval") return colors.accentBright;
-  if (status === "failed" || status === "cancelled" || status === "interrupted") return colors.danger;
-  if (status === "completed") return colors.success;
-  return colors.textDim;
+function statusTone(status: string | undefined): BadgeTone {
+  if (status === "running") return "info";
+  if (status === "awaiting_approval") return "warning";
+  if (status === "failed" || status === "cancelled" || status === "interrupted") return "danger";
+  if (status === "completed") return "success";
+  return "neutral";
 }
 
 export function CenterHeader() {
@@ -27,75 +29,35 @@ export function CenterHeader() {
   };
   return (
     <View
-      style={{
-        minHeight: 64,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderSoft,
-        backgroundColor: "#0d1017",
-        paddingHorizontal: 20,
-        paddingVertical: 11,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-      }}
+      class="flex-row items-center gap-3 border-b border-border-subtle bg-surface-soft px-5 py-3"
+      style={{ minHeight: 64 }}
     >
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 9, minWidth: 0 }}>
+      <View class="min-w-0 flex-1 gap-1">
+        <View class="min-w-0 flex-row items-center gap-2">
           <Text
-            style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: "720",
-              lineHeight: 22,
-              numberOfLines: 1,
-              textOverflow: "ellipsis",
-              flexShrink: 1,
-            }}
+            class="text-lg font-semibold leading-6 tracking-tight text-foreground"
+            style={{ numberOfLines: 1, textOverflow: "ellipsis", flexShrink: 1 }}
           >
             {activeSnapshot()?.title ?? "Forge NSH"}
           </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.borderSoft,
-              backgroundColor: "#11151e",
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusTone(status()) }} />
-            <Text style={{ color: "#aeb6c5", fontSize: 11, fontWeight: "700" }}>{statusLabel(status())}</Text>
-          </View>
+          <Badge dot tone={statusTone(status())} label={statusLabel(status())} />
         </View>
-        <Text style={{ ...textStyles.dim, numberOfLines: 1, textOverflow: "ellipsis" }}>
+        <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
           {activeSnapshot()
             ? `${activeSnapshot()?.model ?? "model not selected"} · updated ${formatTime(activeSnapshot()?.updatedAt)}`
             : "Embedded Forge Core · NSH web shell"}
         </Text>
       </View>
       <Button
+        variant="outline"
+        size="sm"
+        label="Refresh"
         onPress={refresh}
         disabled={busyAction() !== undefined}
+        busy={busyAction() !== undefined}
         accessibilityLabel="Refresh sessions"
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 10,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1,
-          borderColor: colors.borderSoft,
-          backgroundColor: "#121722",
-          opacity: busyAction() !== undefined ? 0.55 : 1,
-        }}
-        hoverStyle={{ backgroundColor: "#1a202c" }}
-      >
-        <Text style={{ color: "#b9c1cf", fontSize: 16, fontWeight: "800" }}>⟳</Text>
-      </Button>
+        tooltip="Refresh sessions"
+      />
     </View>
   );
 }
