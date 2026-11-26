@@ -1,0 +1,11 @@
+.nsh/
+target/
+node_modules/
+dist/
+out/
+.forge-nsh/
+*.log
+*.pid
+tmp/
+.tmp/
+.DS_Store
