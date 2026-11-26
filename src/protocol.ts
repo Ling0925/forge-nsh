@@ -136,6 +136,169 @@ export interface RunHandle {
   sessionId: string;
 }
 
+export type ProviderProtocol = "chat-completions" | "responses" | "anthropic" | "gemini";
+export type ReasoningEffort = "default" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ThemePreference = "system" | "light" | "dark";
+export type PermissionPreference = "readonly" | "workspace" | "unrestricted";
+export type ProviderEndpoints = Partial<Record<ProviderProtocol, string | undefined>>;
+
+/** Public, normalized model metadata. Missing capabilities are unknown, never secrets. */
+export interface ModelCatalogEntry {
+  id: string;
+  contextWindowTokens: number | null;
+  displayName?: string;
+  maxOutputTokens?: number | null;
+  inputModalities?: readonly string[];
+  outputModalities?: readonly string[];
+  reasoningEffort?: ReasoningEffort;
+  reasoningEfforts?: readonly string[];
+  tools?: boolean;
+  vision?: boolean;
+  protocols?: readonly ProviderProtocol[];
+  pricing?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    currency?: string;
+    source?: string;
+    updatedAt?: string;
+  };
+  provenance?: Readonly<Record<string, "upstream" | "reference" | "user">>;
+}
+
+export type ModelCatalog = readonly ModelCatalogEntry[];
+
+export interface ModelSelection {
+  mode: "all" | "selected" | "none";
+  models?: readonly string[];
+  manual?: ModelCatalog;
+  overrides?: Readonly<Record<string, Partial<Omit<ModelCatalogEntry, "id">> & { apiMode?: ProviderProtocol }>>;
+}
+
+export interface PublicProviderPreset {
+  id: string;
+  name: string;
+  kind: "vendor" | "relay" | "local" | "custom";
+  endpoints: ProviderEndpoints;
+  regionLabel?: string;
+  regions?: readonly {
+    id: string;
+    name: string;
+    endpoints: ProviderEndpoints;
+    website?: string;
+    keysUrl?: string;
+  }[];
+  website?: string;
+  keysUrl?: string;
+  noKey?: boolean;
+}
+
+export type ModelAccessResult =
+  | { type: "presets"; presets: readonly PublicProviderPreset[] }
+  | {
+      type: "catalog";
+      sourceId: string;
+      models: ModelCatalog;
+      stale?: boolean;
+      fetchedAt?: string;
+      error?: string;
+    };
+
+export interface PublicCredential {
+  id: string;
+  label: string;
+  enabled: boolean;
+  type: "api-key" | "account";
+  status: "ready" | "disabled" | "expired" | "signed-out";
+  platform?: string;
+  expiresAt?: number;
+  protocol?: ProviderProtocol;
+}
+
+/** Public projection of a Forge provider source: it never contains secrets. */
+export interface PublicProviderSource {
+  id: string;
+  label: string;
+  baseUrl: string;
+  model: string;
+  apiMode?: ProviderProtocol;
+  revision: number;
+  hasApiKey: boolean;
+  preset?: string;
+  endpoints?: ProviderEndpoints;
+  activeCredentialId?: string;
+  credentials?: readonly PublicCredential[];
+  connection?: {
+    headerNames?: readonly string[];
+    hasExtraBody?: boolean;
+    hasProxy?: boolean;
+    hasVertex?: boolean;
+    auth?: { type?: "auto" | "bearer" | "api-key" | "none" | "header"; header?: string };
+  };
+  credentialRouting?: "order" | "rotate" | "usage" | "smart" | "pace";
+  sticky?: boolean;
+  modelSelection?: ModelSelection;
+  modelAliases?: Readonly<Record<string, string>>;
+}
+
+export interface PublicSettings {
+  baseUrl: string;
+  model: string;
+  apiMode?: ProviderProtocol;
+  theme: ThemePreference;
+  defaultPermission: PermissionPreference;
+  requestTimeoutMs: number;
+  contextBudgetChars: number;
+  contextBudgetTokens?: number | null;
+  reasoningEffort?: ReasoningEffort;
+  hasApiKey: boolean;
+  isConfigured: boolean;
+  providerSources?: readonly PublicProviderSource[];
+  activeSourceId?: string;
+  environmentOverride?: boolean;
+}
+
+export interface ProviderSourceSave {
+  id: string;
+  label: string;
+  baseUrl: string;
+  model: string;
+  apiMode?: ProviderProtocol;
+  preset?: string;
+  endpoints?: ProviderEndpoints;
+  modelSelection?: ModelSelection;
+  modelAliases?: Readonly<Record<string, string>>;
+  credentialRouting?: "order" | "rotate" | "usage" | "smart" | "pace";
+  sticky?: boolean;
+  activeCredentialId?: string;
+}
+
+export type ProviderSourceOperation =
+  | {
+      type: "save";
+      source: ProviderSourceSave;
+      apiKey?: string;
+      expectedRevision?: number;
+    }
+  | { type: "activate"; id: string }
+  | { type: "remove"; id: string; forgottenSessionIds?: readonly string[] };
+
+export interface SettingsPatch {
+  theme?: ThemePreference;
+  defaultPermission?: PermissionPreference;
+  reasoningEffort?: ReasoningEffort;
+  requestTimeoutMs?: number;
+  contextBudgetChars?: number;
+  contextBudgetTokens?: number | null;
+}
+
+/** The subset of Forge Core's ConfigureInput written by this workbench. */
+export interface ConfigureInput {
+  apiKey?: string;
+  source?: ProviderSourceOperation;
+  settings?: SettingsPatch;
+}
+
 interface RpcSuccess<T> {
   id: string;
   ok: true;

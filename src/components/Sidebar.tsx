@@ -5,6 +5,7 @@ import {
   busyAction,
   connectionState,
   createSession,
+  openSettings,
   selectSession,
   sessionCount,
   socketState,
@@ -140,6 +141,14 @@ export function Sidebar() {
       </Scroll>
 
       <View class="mx-3 mt-2 gap-2 border-t border-sidebar-border px-1 pt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full"
+          label="⚙ Settings"
+          onPress={openSettings}
+          accessibilityLabel="Open Forge settings"
+        />
         <Badge dot tone={connectionBadgeTone()} label={connectionBadgeLabel()} />
         <Text class={textClasses.dim} style={{ numberOfLines: 1, textOverflow: "ellipsis" }}>
           {oneLine(workspace() || "waiting for /api/connect", 42)}
